@@ -1,6 +1,7 @@
 extern crate clap;
 
 use clap::{App, Arg, SubCommand};
+mod elf;
 
 #[derive(Debug, Clone)]
 enum CmdArgs {
@@ -59,7 +60,7 @@ fn parse_args() -> CmdArgs {
 			.arg(Arg::with_name("new_cubin_file").index(2).required(false)))
 			.get_matches();
 
-    let result = match matches.subcommand() {
+    match matches.subcommand() {
         ("list", Some(sub_m)) => if let Some(file) = sub_m.value_of("cubin_file") {
             CmdArgs::List(file.into())
         } else {
@@ -130,31 +131,36 @@ fn parse_args() -> CmdArgs {
             println!("{}", matches.usage());
             CmdArgs::Error("missing subcommand")
         }
-    };
-    result
+    }
 }
+
+fn sass_list(file: String) {
+
+}
+fn sass_test(reg: bool, all: bool, file: String) {
+
+}
+fn sass_extract(kernel_name: Option<String>, file: String) {
+
+}
+fn sass_pre(debug: bool, asm_file: String, new_asm_file: Option<String>) {
+
+}
+fn sass_insert(noreuse: bool, asm_file: String, new_asm_file: Option<String>) {
+
+}
+
+
+
 
 fn main() {
     let args = parse_args();
     match args {
-        CmdArgs::List(file) => println!("list file {}", file),
-        CmdArgs::Test(reg, all, file) => {
-            if reg {
-                println!("dump reg");
-            }
-            if all {
-                println!("dump all");
-            }
-            println!("file: {}", file);
-        }
-        CmdArgs::Extract(kernel, file) => {
-            if let Some(kernel) = kernel {
-                println!("kernel_name: {}", kernel);
-            }
-            println!("file: {}", file);
-        }
-        CmdArgs::Pre(_, file, _) => println!("file: {}", file),
-        CmdArgs::Insert(_, file, _) => println!("file: {}", file),
+        CmdArgs::List(file) => sass_list(file),
+        CmdArgs::Test(reg, all, file) => sass_test(reg, all, file),
+        CmdArgs::Extract(kernel, file) => sass_extract(kernel, file),
+        CmdArgs::Pre(debug, asm_file, new_asm_file) => sass_pre(debug, asm_file, new_asm_file),
+        CmdArgs::Insert(noreuse, asm_file, new_asm_file) => sass_insert(noreuse, asm_file, new_asm_file),
         CmdArgs::Error(err) => println!("Error: {}", err),
     }
 }
