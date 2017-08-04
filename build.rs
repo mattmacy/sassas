@@ -10,11 +10,11 @@ fn main() {
         // requires a nightly rustc and enabling
         // unstable features.
         .no_unstable_rust()
-        .clang_arg("-Isrc")
+        .clang_arg("-Ibindings")
         //.clang_arg(inc)
         // The input header we would like to generate
         // bindings for.
-        .header("src/wrapper.h")
+        .header("bindings/wrapper.h")
         // Finish the builder and generate the bindings.
         .generate()
         // Unwrap the Result and panic on failure.
