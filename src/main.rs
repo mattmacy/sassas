@@ -137,21 +137,11 @@ fn parse_args() -> CmdArgs {
     }
 }
 
-fn sass_list(file: String) {
-
-}
-fn sass_test(reg: bool, all: bool, file: String) {
-
-}
-fn sass_extract(kernel_name: Option<String>, file: String) {
-
-}
-fn sass_pre(debug: bool, asm_file: String, new_asm_file: Option<String>) {
-
-}
-fn sass_insert(noreuse: bool, asm_file: String, new_asm_file: Option<String>) {
-
-}
+fn sass_list(file: String) {}
+fn sass_test(reg: bool, all: bool, file: String) {}
+fn sass_extract(kernel_name: Option<String>, file: String) {}
+fn sass_pre(debug: bool, asm_file: String, new_asm_file: Option<String>) {}
+fn sass_insert(noreuse: bool, asm_file: String, new_asm_file: Option<String>) {}
 
 
 
@@ -163,7 +153,9 @@ fn main() {
         CmdArgs::Test(reg, all, file) => sass_test(reg, all, file),
         CmdArgs::Extract(kernel, file) => sass_extract(kernel, file),
         CmdArgs::Pre(debug, asm_file, new_asm_file) => sass_pre(debug, asm_file, new_asm_file),
-        CmdArgs::Insert(noreuse, asm_file, new_asm_file) => sass_insert(noreuse, asm_file, new_asm_file),
+        CmdArgs::Insert(noreuse, asm_file, new_asm_file) => {
+            sass_insert(noreuse, asm_file, new_asm_file)
+        }
         CmdArgs::Error(err) => println!("Error: {}", err),
     }
 }
