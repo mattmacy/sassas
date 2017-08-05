@@ -4,7 +4,6 @@ use std::{collections, io, slice};
 use elf;
 use elf::{Elf32_Ehdr, Elf32_Phdr, Elf32_Shdr, Elf32_Sym, Elf64_Ehdr, Elf64_Phdr, Elf64_Shdr,
           Elf64_Sym};
-use std::ffi::CString;
 
 pub struct Cubin {}
 pub struct SymEnt {}
