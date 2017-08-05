@@ -21,13 +21,10 @@ impl Cubin {
     pub fn new(file: String) -> io::Result<Self> {
         let fp = Mmap::open_path(file, Protection::Read)?;
         let elf32_hdr = unsafe { &*(fp.ptr() as *const Elf32_Ehdr) as &Elf32_Ehdr };
-        let class = elf32_hdr.e_type;
-        if class == elf::ELFCLASS32 as u16 {
-            Self::new32(fp)
-        } else if class == elf::ELFCLASS64 as u16 {
-            Self::new64(fp)
-        } else {
-            panic!("invalid class type: {}", class)
+        match elf32_hdr.e_type as u32 {
+            elf::ELFCLASS32 => Self::new32(fp),
+            elf::ELFCLASS64 => Self::new64(fp),
+            _ => panic!("invalid class type: {}", elf32_hdr.e_type),
         }
     }
     fn new32(fp: Mmap) -> io::Result<Self> {
