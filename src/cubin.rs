@@ -1,6 +1,6 @@
 
 use memmap::{Mmap, Protection};
-use std::{io, slice};
+use std::{collections, io, slice};
 use std::io::{Read, Write};
 use elf;
 use elf::{Elf32_Ehdr, Elf32_Phdr, Elf32_Shdr, Elf32_Sym, Elf64_Ehdr, Elf64_Phdr, Elf64_Shdr,
@@ -10,11 +10,15 @@ use std::os::raw::c_char;
 
 pub struct Cubin {}
 pub struct SymEnt {}
+#[derive(Clone, Debug)]
 pub enum SecHdr {
     StrTab(Vec<String>),
     SymTab32(Vec<Elf32_Sym>),
     SymTab64(Vec<Elf64_Sym>),
+    Empty,
+    Other(u32),
 }
+
 
 impl Cubin {
     pub fn new(file: String) -> io::Result<Self> {
@@ -36,36 +40,54 @@ impl Cubin {
         let (off, len) = (hdr.e_phoff as isize, hdr.e_phentsize as usize);
         let phdrs = (unsafe {
             slice::from_raw_parts(fp.ptr().offset(off) as *const Elf32_Phdr, len)
-        }).clone()
-            .to_vec();
+        }).to_vec();
         let (off, len) = (hdr.e_shoff as isize, hdr.e_shentsize as usize);
         let shdrs = (unsafe {
             slice::from_raw_parts(fp.ptr().offset(off) as *const Elf32_Shdr, len)
-        }).clone()
-            .to_vec();
-        let shdrs: Vec<Elf32_Shdr> = shdrs
-            .iter()
-            .filter(|h| h.sh_type != elf::SHT_NOBITS && h.sh_size != 0)
-            .map(|h| *h)
-            .collect();
+        }).to_vec();
+        let stridx = hdr.e_shstrndx;
         let mut shdrvals = Vec::new();
-        for shdr in shdrs {
+        let mut shdrmap = collections::HashMap::new();
+        for shdr in &shdrs {
             let (off, len) = (shdr.sh_offset as isize, shdr.sh_size as usize);
-            match shdr.sh_type {
-                elf::SHT_STRTAB => {
-                    let cstr = (unsafe {
-                        slice::from_raw_parts(fp.ptr().offset(off) as *const u8, len)
-                    }).to_vec();
-                    let strs = (unsafe { CString::from_vec_unchecked(cstr).into_string() })
-                        .ok()
-                        .unwrap();
-                    let strtab = strs.split('\0').map(|s| s.into()).collect::<Vec<String>>();
-                    shdrvals.push(SecHdr::StrTab(strtab));
-                }
-                elf::SHT_SYMTAB => {}
-                _ => {}
+            let data = unsafe { slice::from_raw_parts(fp.ptr().offset(off) as *const u8, len) };
+            if shdr.sh_type == elf::SHT_NOBITS || shdr.sh_size == 0 {
+                shdrvals.push((SecHdr::Empty, data.to_vec()));
+                continue;
             }
+            let sh = match shdr.sh_type {
+                elf::SHT_STRTAB => {
+                    let strtab = data.split(|ch| *ch == b'\0')
+                        .map(|slice| String::from_utf8(slice.to_vec()).unwrap())
+                        .collect::<Vec<String>>();
+                    SecHdr::StrTab(strtab)
+                }
+                elf::SHT_SYMTAB => {
+                    let mut v = Vec::new();
+                    let mut offset = 0;
+                    while offset < shdr.sh_size {
+                        let sym = unsafe {
+                            &*(fp.ptr().offset(off + offset as isize) as *const Elf32_Sym) as
+                                &Elf32_Sym
+                        };
+                        v.push(sym.clone());
+                        offset += shdr.sh_entsize;
+                    }
+                    SecHdr::SymTab32(v)
+                }
+                _ => SecHdr::Other(shdr.sh_type),
+            };
+            shdrvals.push((sh, data.to_vec()));
         }
+        let &(ref strtabent, _) = &shdrvals[stridx as usize];
+        let strtab = match strtabent {
+            &SecHdr::StrTab(ref v) => v,
+            _ => panic!("expected strtab, got: {:?}", strtabent),
+        };
+        for shdr in &shdrs {
+            shdrmap.insert(strtab[shdr.sh_name as usize].clone(), shdr.clone());
+        }
+        //let strtab = collections::HashMap::new();
 
 
         Ok(Cubin {})
