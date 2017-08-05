@@ -64,11 +64,13 @@ fn parse_args() -> CmdArgs {
 			.get_matches();
 
     match matches.subcommand() {
-        ("list", Some(sub_m)) => if let Some(file) = sub_m.value_of("cubin_file") {
-            CmdArgs::List(file.into())
-        } else {
-            CmdArgs::Error("<file>.cubin missing")
-        },
+        ("list", Some(sub_m)) => {
+            if let Some(file) = sub_m.value_of("cubin_file") {
+                CmdArgs::List(file.into())
+            } else {
+                CmdArgs::Error("<file>.cubin missing")
+            }
+        }
         ("test", Some(sub_m)) => {
             let (mut reg, mut all) = (false, false);
             if sub_m.is_present("reg") {

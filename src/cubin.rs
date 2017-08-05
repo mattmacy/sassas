@@ -39,12 +39,12 @@ impl Cubin {
         let addr_size = if hdr.e_flags & 0x400 == 0x400 { 64 } else { 32 };
         let (off, len) = (hdr.e_phoff as isize, hdr.e_phentsize as usize);
         let phdrs = (unsafe {
-            slice::from_raw_parts(fp.ptr().offset(off) as *const Elf32_Phdr, len)
-        }).to_vec();
+                         slice::from_raw_parts(fp.ptr().offset(off) as *const Elf32_Phdr, len)
+                     }).to_vec();
         let (off, len) = (hdr.e_shoff as isize, hdr.e_shentsize as usize);
         let shdrs = (unsafe {
-            slice::from_raw_parts(fp.ptr().offset(off) as *const Elf32_Shdr, len)
-        }).to_vec();
+                         slice::from_raw_parts(fp.ptr().offset(off) as *const Elf32_Shdr, len)
+                     }).to_vec();
         let stridx = hdr.e_shstrndx;
         let mut shdrvals = Vec::new();
         let mut shdrmap = collections::HashMap::new();
