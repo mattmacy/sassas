@@ -1,7 +1,10 @@
 extern crate clap;
+extern crate memmap;
 
 use clap::{App, Arg, SubCommand};
 mod elf;
+mod cubin;
+
 
 #[derive(Debug, Clone)]
 enum CmdArgs {

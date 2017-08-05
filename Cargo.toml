@@ -6,6 +6,7 @@ build = "build.rs"
 
 [dependencies]
 clap = "2.24"
+memmap = "^0.5"
 
 [build-dependencies]
 bindgen = "^0.23.1"
