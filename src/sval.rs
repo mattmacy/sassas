@@ -4,7 +4,7 @@ pub enum SVal {
     Int(i32),
     Float(f32),
     Data(Vec<u8>),
-    DataL(Vec<u64>),
+    DataL(Vec<u32>),
     Str(Vec<String>),
     Required,
 }
@@ -29,8 +29,8 @@ impl From<Vec<u8>> for SVal {
         SVal::Data(input)
     }
 }
-impl From<Vec<u64>> for SVal {
-    fn from(input: Vec<u64>) -> Self {
+impl From<Vec<u32>> for SVal {
+    fn from(input: Vec<u32>) -> Self {
         SVal::DataL(input)
     }
 }
@@ -63,7 +63,7 @@ impl From<SVal> for Vec<u8> {
         }
     }
 }
-impl From<SVal> for Vec<u64> {
+impl From<SVal> for Vec<u32> {
     fn from(input: SVal) -> Self {
         match input {
             self::SVal::DataL(x) => x.clone(),

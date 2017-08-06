@@ -180,28 +180,28 @@ impl Cubin {
                 _ => panic!("got unexpected hdr type: {:?}", paramshval),
             };
             let mut paramshmap: HashMap<&'static str, SVal> = collections::HashMap::new();
-            let data64 = unsafe { ::std::mem::transmute::<Vec<u8>, Vec<u64>>(data.clone()) };
-            paramshmap.insert("ParamData", SVal::DataL(data64.clone()));
-            let hex64 = data64
+            let data32 = unsafe { ::std::mem::transmute::<Vec<u8>, Vec<u32>>(data.clone()) };
+            paramshmap.insert("ParamData", SVal::DataL(data32.clone()));
+            let hex32 = data32
                 .iter()
                 .map(|v| format!("0x{:08x}", *v))
                 .collect::<Vec<String>>();
-            paramshmap.insert("ParamHex", hex64.into());
+            paramshmap.insert("ParamHex", hex32.into());
 
             // find the first param delimiter
             let mut idx = 0;
-            while idx < data64.len() && data64[idx] != 0x00080a04 {
+            while idx < data32.len() && data32[idx] != 0x00080a04 {
                 idx += 1;
             }
-            let first = data64[idx + 2] & 0xFFFF;
+            let first = data32[idx + 2] & 0xFFFF;
             idx += 4;
             let mut params = VecDeque::new();
-            while idx < data64.len() && data64[idx] == 0x000c1704 {
-                let ord = data64[idx + 2] & 0xFFFF;
-                let offset = format!("0x{:02x}", first + (data64[idx + 2] >> 16));
-                let psize = data64[idx + 3] >> 18;
-                let align = if data64[idx + 3] & 0x400 == 0x400 {
-                    1 << (data64[idx + 3] & 0x3ff)
+            while idx < data32.len() && data32[idx] == 0x000c1704 {
+                let ord = data32[idx + 2] & 0xFFFF;
+                let offset = format!("0x{:02x}", first + (data32[idx + 2] >> 16));
+                let psize = data32[idx + 3] >> 18;
+                let align = if data32[idx + 3] & 0x400 == 0x400 {
+                    1 << (data32[idx + 3] & 0x3ff)
                 } else {
                     0
                 };
@@ -209,7 +209,7 @@ impl Cubin {
                 params.push_front(param);
                 idx += 4;
             }
-            let static_params = &data64[0..idx - 1];
+            let static_params = &data32[0..idx - 1];
 
 
         }
