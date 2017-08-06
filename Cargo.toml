@@ -7,6 +7,7 @@ build = "build.rs"
 [dependencies]
 clap = "2.24"
 memmap = "^0.5"
+itertools= "0.6"
 
 [build-dependencies]
 bindgen = "^0.23.1"
