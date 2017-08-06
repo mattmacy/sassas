@@ -1,7 +1,7 @@
 
 use memmap::{Mmap, Protection};
 use std::{collections, io, slice};
-use std::collections::HashMap;
+use std::collections::{VecDeque, HashMap};
 use itertools::zip;
 use sval::SVal;
 use unsafe_lib::MutMap;
@@ -187,10 +187,30 @@ impl Cubin {
                 .map(|v| format!("0x{:08x}", *v))
                 .collect::<Vec<String>>();
             paramshmap.insert("ParamHex", hex64.into());
-            /*
-                # Extract raw param data
-                my @data = unpack "L*", pack "H*", $paramSec->{Data};
-            */
+
+            // find the first param delimiter
+            let mut idx = 0;
+            while idx < data64.len() && data64[idx] != 0x00080a04 {
+                idx += 1;
+            }
+            let first = data64[idx + 2] & 0xFFFF;
+            idx += 4;
+            let mut params = VecDeque::new();
+            while idx < data64.len() && data64[idx] == 0x000c1704 {
+                let ord = data64[idx + 2] & 0xFFFF;
+                let offset = format!("0x{:02x}", first + (data64[idx + 2] >> 16));
+                let psize = data64[idx + 3] >> 18;
+                let align = if data64[idx + 3] & 0x400 == 0x400 {
+                    1 << (data64[idx + 3] & 0x3ff)
+                } else {
+                    0
+                };
+                let param = format!("{}:{}:{}:{}", ord, offset, psize, align);
+                params.push_front(param);
+                idx += 4;
+            }
+            let static_params = &data64[0..idx - 1];
+
 
         }
 
