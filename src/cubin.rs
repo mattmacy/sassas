@@ -129,9 +129,6 @@ impl Cubin {
             symtabmap.insert(symname.clone(), syment.clone());
             let sh = &shdrs[syment.st_shndx as usize];
             let shval = &shdrvals[syment.st_shndx as usize];
-            if syment.st_info & 0x0f != 0x02 && syment.st_info & 0x10 != 0x10 {
-                continue;
-            }
             if syment.st_info & 0x10 == 0x10 {
                 let mut symmap = match &mut cubintbl["Symbols"] {
                     &mut CubinFld::Symbols32(ref mut map) => map,
@@ -140,7 +137,10 @@ impl Cubin {
                 symmap.insert(symname.clone(), syment.clone());
                 continue;
             }
-            // Remaining will all be tagged FUNC
+            // Skip sections not tagged FUNC
+            if syment.st_info & 0x0f != 0x02 {
+                continue;
+            }
             // Create a hash of kernels for output
             //my $kernelSec = $cubin->{Kernels}{$symEnt->{Name}} = $secHdr;
             //kernsecmap.insert(symname.clone(), sh.clone());
@@ -176,32 +176,32 @@ impl Cubin {
             }
             let &(ref paramsh, ref paramshval) = &shdrmap[&infoname];
             let data = match paramshval {
-                &SecHdr::Other(_, ref data) => data,
+                &SecHdr::Other(_, ref data) => unsafe {
+                    ::std::mem::transmute::<Vec<u8>, Vec<u32>>(data.clone())
+                },
                 _ => panic!("got unexpected hdr type: {:?}", paramshval),
             };
             let mut paramshmap: HashMap<&'static str, SVal> = collections::HashMap::new();
-            let data32 = unsafe { ::std::mem::transmute::<Vec<u8>, Vec<u32>>(data.clone()) };
-            paramshmap.insert("ParamData", SVal::DataL(data32.clone()));
-            let hex32 = data32
-                .iter()
+            paramshmap.insert("ParamData", SVal::DataL(data.clone()));
+            let hex32 = data.iter()
                 .map(|v| format!("0x{:08x}", *v))
                 .collect::<Vec<String>>();
             paramshmap.insert("ParamHex", hex32.into());
 
             // find the first param delimiter
             let mut idx = 0;
-            while idx < data32.len() && data32[idx] != 0x00080a04 {
+            while idx < data.len() && data[idx] != 0x00080a04 {
                 idx += 1;
             }
-            let first = data32[idx + 2] & 0xFFFF;
+            let first = data[idx + 2] & 0xFFFF;
             idx += 4;
             let mut params = VecDeque::new();
-            while idx < data32.len() && data32[idx] == 0x000c1704 {
-                let ord = data32[idx + 2] & 0xFFFF;
-                let offset = format!("0x{:02x}", first + (data32[idx + 2] >> 16));
-                let psize = data32[idx + 3] >> 18;
-                let align = if data32[idx + 3] & 0x400 == 0x400 {
-                    1 << (data32[idx + 3] & 0x3ff)
+            while idx < data.len() && data[idx] == 0x000c1704 {
+                let ord = data[idx + 2] & 0xFFFF;
+                let offset = format!("0x{:02x}", first + (data[idx + 2] >> 16));
+                let psize = data[idx + 3] >> 18;
+                let align = if data[idx + 3] & 0x400 == 0x400 {
+                    1 << (data[idx + 3] & 0x3ff)
                 } else {
                     0
                 };
@@ -209,9 +209,36 @@ impl Cubin {
                 params.push_front(param);
                 idx += 4;
             }
-            let static_params = &data32[0..idx - 1];
-
-
+            let static_params = data[0..idx - 1].to_vec();
+            let mut param_sec: HashMap<&'static str, SVal> = HashMap::new();
+            while idx < data.len() {
+                let code = data[idx] & 0xFFFF;
+                let size = data[idx] >> 16;
+                let step = (size / 4) as usize;
+                idx += 1;
+                let slice = data[idx..idx + step].to_vec();
+                match code {
+                    // EIATTR_MAXREG_COUNT
+                    0x1b03 => param_sec.insert("MAXREG_COUNT", size.into()),
+                    // EIATTR_S2RCTAID_INSTR_OFFSETS
+                    0x1d04 => param_sec.insert("CTAIDOffsets", slice.into()),
+                    // EIATTR_EXIT_INSTR_OFFSETS
+                    0x1c04 => param_sec.insert("ExitOffsets", slice.into()),
+                    // EIATTR_CTAIDZ_USED
+                    0x0401 => param_sec.insert("CTADIZUsed", true.into()),
+                    // EIATTR_REQNTID
+                    0x1004 => param_sec.insert("REQNTID", slice.into()),
+                    // EIATTR_MAX_THREADS
+                    0x0504 => param_sec.insert("MAXNTID", slice.into()),
+                    // EIATTR_CRS_STACK_SIZE
+                    0x1e04 => param_sec.insert("STACKSIZE", slice.into()),
+                    _ => {
+                        println!("Unknown Code 0x{:02x} (size:{})\n", code, size);
+                        None
+                    }
+                };
+                idx += step;
+            }
         }
 
         Ok(Cubin {})

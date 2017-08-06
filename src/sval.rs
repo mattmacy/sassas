@@ -2,6 +2,7 @@
 pub enum SVal {
     Bool(bool),
     Int(i32),
+    UInt(u32),
     Float(f32),
     Data(Vec<u8>),
     DataL(Vec<u32>),
@@ -17,6 +18,11 @@ impl From<f32> for SVal {
 impl From<i32> for SVal {
     fn from(input: i32) -> Self {
         SVal::Int(input)
+    }
+}
+impl From<u32> for SVal {
+    fn from(input: u32) -> Self {
+        SVal::UInt(input)
     }
 }
 impl From<bool> for SVal {
@@ -43,6 +49,22 @@ impl From<SVal> for bool {
     fn from(input: SVal) -> Self {
         match input {
             self::SVal::Bool(x) => x.clone(),
+            _ => unimplemented!(),
+        }
+    }
+}
+impl From<SVal> for i32 {
+    fn from(input: SVal) -> Self {
+        match input {
+            self::SVal::Int(x) => x.clone(),
+            _ => unimplemented!(),
+        }
+    }
+}
+impl From<SVal> for u32 {
+    fn from(input: SVal) -> Self {
+        match input {
+            self::SVal::UInt(x) => x.clone(),
             _ => unimplemented!(),
         }
     }
