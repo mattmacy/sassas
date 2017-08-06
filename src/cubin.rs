@@ -1,6 +1,10 @@
 
 use memmap::{Mmap, Protection};
 use std::{collections, io, slice};
+use std::collections::HashMap;
+use itertools::zip;
+use sval::SVal;
+use unsafe_lib::MutMap;
 use elf;
 use elf::{Elf32_Ehdr, Elf32_Phdr, Elf32_Shdr, Elf32_Sym, Elf64_Ehdr, Elf64_Phdr, Elf64_Shdr,
           Elf64_Sym};
@@ -9,11 +13,40 @@ pub struct Cubin {}
 pub struct SymEnt {}
 #[derive(Clone, Debug)]
 pub enum SecHdr {
-    StrTab(Vec<String>),
-    SymTab32(Vec<Elf32_Sym>),
-    SymTab64(Vec<Elf64_Sym>),
+    StrTab(Vec<String>, Vec<u8>),
+    SymTab32(Vec<Elf32_Sym>, Vec<u8>),
+    SymTab64(Vec<Elf64_Sym>, Vec<u8>),
     Empty,
-    Other(u32),
+    Other(u32, Vec<u8>),
+}
+pub enum CubinFld {
+    SHdr(SecHdr),
+    Symbols32(collections::HashMap<String, Elf32_Sym>),
+    Symbols64(collections::HashMap<&'static str, Elf64_Sym>),
+    Empty,
+}
+#[derive(Clone, Copy)]
+pub enum SymBind {
+    Local,
+    Global,
+    Weak,
+}
+static SYMBIND: [SymBind; 3] = [SymBind::Local, SymBind::Global, SymBind::Weak];
+
+pub struct KernelSection {
+    pub name: String,
+    pub linkage: SymBind,
+    pub kernel_data: Vec<u8>,
+    pub bar_cnt: u32,
+    pub reg_cnt: u32,
+    pub shared_size: u32,
+    pub constant_sec: SecHdr,
+    pub param_sec: SecHdr,
+}
+impl Default for CubinFld {
+    fn default() -> Self {
+        CubinFld::Empty
+    }
 }
 
 
@@ -42,11 +75,12 @@ impl Cubin {
         let stridx = hdr.e_shstrndx;
         let mut shdrvals = Vec::new();
         let mut shdrmap = collections::HashMap::new();
+        let mut cubintbl = MutMap::new();
         for shdr in &shdrs {
             let (off, len) = (shdr.sh_offset as isize, shdr.sh_size as usize);
             let data = unsafe { slice::from_raw_parts(fp.ptr().offset(off) as *const u8, len) };
             if shdr.sh_type == elf::SHT_NOBITS || shdr.sh_size == 0 {
-                shdrvals.push((SecHdr::Empty, data.to_vec()));
+                shdrvals.push(SecHdr::Empty);
                 continue;
             }
             let sh = match shdr.sh_type {
@@ -54,7 +88,7 @@ impl Cubin {
                     let strtab = data.split(|ch| *ch == b'\0')
                         .map(|slice| String::from_utf8(slice.to_vec()).unwrap())
                         .collect::<Vec<String>>();
-                    SecHdr::StrTab(strtab)
+                    SecHdr::StrTab(strtab, data.to_vec())
                 }
                 elf::SHT_SYMTAB => {
                     let mut v = Vec::new();
@@ -67,22 +101,98 @@ impl Cubin {
                         v.push(sym.clone());
                         offset += shdr.sh_entsize;
                     }
-                    SecHdr::SymTab32(v)
+                    SecHdr::SymTab32(v, data.to_vec())
                 }
-                _ => SecHdr::Other(shdr.sh_type),
+                _ => SecHdr::Other(shdr.sh_type, data.to_vec()),
             };
-            shdrvals.push((sh, data.to_vec()));
+            shdrvals.push(sh);
         }
-        let &(ref strtabent, _) = &shdrvals[stridx as usize];
-        let strtab = match strtabent {
-            &SecHdr::StrTab(ref v) => v,
-            _ => panic!("expected strtab, got: {:?}", strtabent),
+        let strtab = match shdrvals[stridx as usize] {
+            SecHdr::StrTab(ref v, _) => v.clone(),
+            _ => panic!("strtab not found"),
         };
-        for shdr in &shdrs {
-            shdrmap.insert(strtab[shdr.sh_name as usize].clone(), shdr.clone());
+        cubintbl.insert("Symbols", CubinFld::Symbols32(HashMap::new()));
+        for (shdr, sh) in zip(&shdrs, &shdrvals) {
+            let name = strtab[shdr.sh_name as usize].clone();
+            shdrmap.insert(name, (shdr.clone(), sh.clone()));
+            //cubintbl.insert(name.clone().as_str(), CubinFld::SHdr(sh.clone()));
         }
-        //let strtab = collections::HashMap::new();
+        let &(_, ref symtab_) = &shdrmap[".symtab"];
+        let symtab = match symtab_ {
+            &SecHdr::SymTab32(ref t, _) => t,
+            _ => panic!("expect Symtab"),
+        };
+        let mut symtabmap = collections::HashMap::new();
+        //let mut kernsecmap = collections::HashMap::new();
+        for syment in symtab {
+            let symname = strtab[syment.st_name as usize].clone();
+            symtabmap.insert(symname.clone(), syment.clone());
+            let sh = &shdrs[syment.st_shndx as usize];
+            let shval = &shdrvals[syment.st_shndx as usize];
+            if syment.st_info & 0x0f != 0x02 && syment.st_info & 0x10 != 0x10 {
+                continue;
+            }
+            if syment.st_info & 0x10 == 0x10 {
+                let mut symmap = match &mut cubintbl["Symbols"] {
+                    &mut CubinFld::Symbols32(ref mut map) => map,
+                    _ => panic!("no symbols found"),
+                };
+                symmap.insert(symname.clone(), syment.clone());
+                continue;
+            }
+            // Remaining will all be tagged FUNC
+            // Create a hash of kernels for output
+            //my $kernelSec = $cubin->{Kernels}{$symEnt->{Name}} = $secHdr;
+            //kernsecmap.insert(symname.clone(), sh.clone());
 
+            // Extract local/global/weak binding info
+            let linkage = SYMBIND[((syment.st_info & 0xf0) >> 4) as usize];
+            // Extract the kernel instructions
+            let data = match shval {
+                &SecHdr::Other(_, ref data) => data,
+                _ => panic!("unexpected hdr: {:?}", sh),
+            };
+            // Extract the max barrier resource identifier used and add 1. Should be 0-16.
+            // If a register is used as a barrier resource id, then this value is the max of 16.
+            let bar_cnt = (sh.sh_flags & 0x01f00000) >> 20;
+            // Extract the number of allocated registers for this kernel.
+            let reg_cnt = (sh.sh_info & 0xff000000) >> 24;
+
+            // Extract the size of shared memory this kernel uses.
+            let shared_sec_ = &shdrmap.get(&format!(".nv.shared.{}", symname));
+            let size = match shared_sec_ {
+                &None => 0,
+                &Some(&(ref shdr, _)) => shdr.sh_size,
+            };
+
+            // Attach constant0 section
+            let &(ref constsh, ref constshval) = &shdrmap[&format!(".nv.constant0.{}", symname)];
+
+            // Extract the kernel parameter data.
+            let infoname = format!(".nv.info.{}", symname);
+
+            if !shdrmap.contains_key(&infoname) {
+                continue;
+            }
+            let &(ref paramsh, ref paramshval) = &shdrmap[&infoname];
+            let data = match paramshval {
+                &SecHdr::Other(_, ref data) => data,
+                _ => panic!("got unexpected hdr type: {:?}", paramshval),
+            };
+            let mut paramshmap: HashMap<&'static str, SVal> = collections::HashMap::new();
+            let data64 = unsafe { ::std::mem::transmute::<Vec<u8>, Vec<u64>>(data.clone()) };
+            paramshmap.insert("ParamData", SVal::DataL(data64.clone()));
+            let hex64 = data64
+                .iter()
+                .map(|v| format!("0x{:08x}", *v))
+                .collect::<Vec<String>>();
+            paramshmap.insert("ParamHex", hex64.into());
+            /*
+                # Extract raw param data
+                my @data = unpack "L*", pack "H*", $paramSec->{Data};
+            */
+
+        }
 
         Ok(Cubin {})
     }

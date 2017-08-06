@@ -1,10 +1,14 @@
+#![allow(unused_variables)]
+
 extern crate clap;
 extern crate memmap;
+extern crate itertools;
 
 use clap::{App, Arg, SubCommand};
 mod elf;
 mod cubin;
-
+mod sval;
+mod unsafe_lib;
 
 #[derive(Debug, Clone)]
 enum CmdArgs {
@@ -139,7 +143,9 @@ fn parse_args() -> CmdArgs {
     }
 }
 
-fn sass_list(file: String) {}
+fn sass_list(file: String) {
+    let bin = cubin::Cubin::new(file);
+}
 fn sass_test(reg: bool, all: bool, file: String) {}
 fn sass_extract(kernel_name: Option<String>, file: String) {}
 fn sass_pre(debug: bool, asm_file: String, new_asm_file: Option<String>) {}
