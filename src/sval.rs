@@ -2,13 +2,19 @@ use elf::{Elf32_Phdr, Elf32_Shdr, Elf32_Sym, Elf64_Phdr, Elf64_Shdr, Elf64_Sym};
 use unsafe_lib::MutStrMap;
 use std::collections::HashMap;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct KernelSection {
     pub name: String,
     pub constant_sec: SecHdr,
     pub shared_sec: Option<SecHdr>,
+    pub linkage: SymBind,
+    pub bar_cnt: u32,
+    pub reg_cnt: u32,
+    pub shared_size: u32,
+    pub param_cnt: usize,
     pub map: HashMap<&'static str, SVal>,
 }
+
 
 #[derive(Clone, Debug)]
 pub enum ElfSymbol {
@@ -58,6 +64,12 @@ pub enum SymBind {
     Local,
     Global,
     Weak,
+    Empty,
+}
+impl Default for SymBind {
+    fn default() -> Self {
+        SymBind::Empty
+    }
 }
 
 #[derive(Clone, Debug)]
