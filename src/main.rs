@@ -6,6 +6,7 @@ extern crate itertools;
 extern crate num;
 
 use clap::{App, Arg, SubCommand};
+use std::io;
 mod elf;
 mod cubin;
 mod sval;
@@ -144,13 +145,37 @@ fn parse_args() -> CmdArgs {
     }
 }
 
-fn sass_list(file: String) {
-    let bin = cubin::Cubin::new(file);
+fn sass_list(file: &String) -> io::Result<()> {
+    let bin = cubin::Cubin::new(file)?;
+    let (arch, class, addr_size) = (bin.arch, bin.class, bin.addr_size);
+    let kernels = bin.list_kernels();
+    let symbols = bin.list_symbols();
+    println!(
+        "{}: arch:sm_{} machine:{}bit address_size:{}bit",
+        file,
+        arch,
+        class,
+        addr_size
+    );
+    for (k, v) in kernels.iter() {
+        let ker: sval::KernelSection = v.clone().into();
+        //        println!("Kernel: {} (Linkage: {:?}, Params: {}, Size: {}, Registers: {}, SharedMem: {}, Barriers: {}", k, )
+    }
+    Ok(())
 }
-fn sass_test(reg: bool, all: bool, file: String) {}
-fn sass_extract(kernel_name: Option<String>, file: String) {}
-fn sass_pre(debug: bool, asm_file: String, new_asm_file: Option<String>) {}
-fn sass_insert(noreuse: bool, asm_file: String, new_asm_file: Option<String>) {}
+fn sass_test(reg: bool, all: bool, file: String) -> io::Result<()> {
+    Ok(())
+}
+fn sass_extract(kernel_name: Option<String>, file: String) -> io::Result<()> {
+    Ok(())
+}
+fn sass_pre(debug: bool, asm_file: String, new_asm_file: Option<String>) -> io::Result<()> {
+    Ok(())
+}
+fn sass_insert(noreuse: bool, asm_file: String, new_asm_file: Option<String>) -> io::Result<()> {
+    Ok(())
+}
+
 
 
 
@@ -158,13 +183,16 @@ fn sass_insert(noreuse: bool, asm_file: String, new_asm_file: Option<String>) {}
 fn main() {
     let args = parse_args();
     match args {
-        CmdArgs::List(file) => sass_list(file),
+        CmdArgs::List(ref file) => sass_list(file),
         CmdArgs::Test(reg, all, file) => sass_test(reg, all, file),
         CmdArgs::Extract(kernel, file) => sass_extract(kernel, file),
         CmdArgs::Pre(debug, asm_file, new_asm_file) => sass_pre(debug, asm_file, new_asm_file),
         CmdArgs::Insert(noreuse, asm_file, new_asm_file) => {
             sass_insert(noreuse, asm_file, new_asm_file)
         }
-        CmdArgs::Error(err) => println!("Error: {}", err),
-    }
+        CmdArgs::Error(err) => {
+            println!("Error: {}", err);
+            Ok(())
+        }
+    };
 }

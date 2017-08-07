@@ -10,6 +10,9 @@ use elf::{Elf32_Ehdr, Elf32_Phdr, Elf32_Shdr, Elf32_Sym, Elf64_Ehdr, Elf64_Phdr,
           Elf64_Sym};
 
 pub struct Cubin {
+    pub arch: u32,
+    pub class: u32,
+    pub addr_size: u32,
     pub table: MutStrMap<MutStrMap<SVal>>,
 }
 static SYMBIND: [SymBind; 3] = [SymBind::Local, SymBind::Global, SymBind::Weak];
@@ -20,7 +23,7 @@ enum ElfSecHdrs {
 }
 
 impl Cubin {
-    pub fn new(file: String) -> io::Result<Self> {
+    pub fn new(file: &String) -> io::Result<Self> {
         let fp = Mmap::open_path(file, Protection::Read)?;
         let elf32_hdr = unsafe { &*(fp.ptr() as *const Elf32_Ehdr) as &Elf32_Ehdr };
         if !(elf32_hdr.e_type as u32 == elf::ELFCLASS32 ||
@@ -31,30 +34,33 @@ impl Cubin {
         Self::build(elf32_hdr.e_type as u32, fp)
     }
     fn build(hdrtype: u32, fp: Mmap) -> io::Result<Self> {
-        let mut cubintbl: MutStrMap<MutStrMap<SVal>> = MutStrMap::new();
+        let cubintbl: MutStrMap<MutStrMap<SVal>> = MutStrMap::new();
         let mut shdrvals = Vec::new();
         let (stridx, elf_shdrs);
-
+        let mut cubin = Cubin {
+            arch: 0,
+            class: 0,
+            addr_size: 0,
+            table: cubintbl,
+        };
         if hdrtype == elf::ELFCLASS32 {
-            cubintbl["Fields"]["Class"] = 32.into();
             let hdr = unsafe { &*(fp.ptr() as *const Elf32_Ehdr) as &Elf32_Ehdr };
             stridx = hdr.e_shstrndx;
-            let arch = (hdr.e_flags & 0xff) as u32;
-            cubintbl["Fields"]["Arch"] = arch.into();
-            let addr_size = if hdr.e_flags & 0x400 == 0x400 { 64 } else { 32 };
-            cubintbl["Fields"]["AddressSize"] = addr_size.into();
+            cubin.class = 32;
+            cubin.arch = (hdr.e_flags & 0xff) as u32;
+            cubin.addr_size = if hdr.e_flags & 0x400 == 0x400 { 64 } else { 32 };
             let (off, len) = (hdr.e_phoff as isize, hdr.e_phentsize as usize);
 
             let phdrs = (unsafe {
                              slice::from_raw_parts(fp.ptr().offset(off) as *const Elf32_Phdr, len)
                          }).to_vec();
-            cubintbl["Fields"]["prgHdrs"] = phdrs.into();
+            cubin.table["Fields"]["prgHdrs"] = phdrs.into();
             let (off, len) = (hdr.e_shoff as isize, hdr.e_shentsize as usize);
             let shdrs = (unsafe {
                              slice::from_raw_parts(fp.ptr().offset(off) as *const Elf32_Shdr, len)
                          }).to_vec();
             elf_shdrs = ElfSecHdrs::Elf32Shdrs(shdrs.clone());
-            cubintbl["Fields"]["secHdrs"] = shdrs.clone().into();
+            cubin.table["Fields"]["secHdrs"] = shdrs.clone().into();
             for shdr in &shdrs {
                 let (off, len) = (shdr.sh_offset as isize, shdr.sh_size as usize);
                 let data = unsafe { slice::from_raw_parts(fp.ptr().offset(off) as *const u8, len) };
@@ -87,24 +93,22 @@ impl Cubin {
                 shdrvals.push(sh);
             }
         } else {
-            cubintbl["Fields"]["Class"] = 64.into();
             let hdr = unsafe { &*(fp.ptr() as *const Elf64_Ehdr) as &Elf64_Ehdr };
             stridx = hdr.e_shstrndx;
-            let arch = (hdr.e_flags & 0xff) as u32;
-            cubintbl["Fields"]["Arch"] = arch.into();
-            let addr_size = if hdr.e_flags & 0x400 == 0x400 { 64 } else { 32 };
-            cubintbl["Fields"]["AddressSize"] = addr_size.into();
+            cubin.class = 64;
+            cubin.arch = (hdr.e_flags & 0xff) as u32;
+            cubin.addr_size = if hdr.e_flags & 0x400 == 0x400 { 64 } else { 32 };
             let (off, len) = (hdr.e_phoff as isize, hdr.e_phentsize as usize);
             let phdrs = (unsafe {
                              slice::from_raw_parts(fp.ptr().offset(off) as *const Elf64_Phdr, len)
                          }).to_vec();
-            cubintbl["Fields"]["prgHdrs"] = phdrs.into();
+            cubin.table["Fields"]["prgHdrs"] = phdrs.into();
             let (off, len) = (hdr.e_shoff as isize, hdr.e_shentsize as usize);
             let shdrs = (unsafe {
                              slice::from_raw_parts(fp.ptr().offset(off) as *const Elf64_Shdr, len)
                          }).to_vec();
             elf_shdrs = ElfSecHdrs::Elf64Shdrs(shdrs.clone());
-            cubintbl["Fields"]["secHdrs"] = shdrs.clone().into();
+            cubin.table["Fields"]["secHdrs"] = shdrs.clone().into();
             for shdr in &shdrs {
                 let (off, len) = (shdr.sh_offset as isize, shdr.sh_size as usize);
                 let data = unsafe { slice::from_raw_parts(fp.ptr().offset(off) as *const u8, len) };
@@ -147,14 +151,14 @@ impl Cubin {
                 for (shdr, sh) in zip(shdrs, &shdrvals) {
                     let name = strtab[shdr.sh_name as usize].clone();
                     shdrmap.insert(name.clone(), (shdr.clone().into(), sh.clone()));
-                    cubintbl["SecHdrs"][&name] = sh.clone().into();
+                    cubin.table["SecHdrs"][&name] = sh.clone().into();
                 }
             }
             ElfSecHdrs::Elf64Shdrs(ref shdrs) => {
                 for (shdr, sh) in zip(shdrs, &shdrvals) {
                     let name = strtab[shdr.sh_name as usize].clone();
                     shdrmap.insert(name.clone(), (shdr.clone().into(), sh.clone()));
-                    cubintbl["SecHdrs"][&name] = sh.clone().into();
+                    cubin.table["SecHdrs"][&name] = sh.clone().into();
                 }
             }
 
@@ -181,33 +185,33 @@ impl Cubin {
             };
             let shval = &shdrvals[syment.shndx()];
             if syment.info() & 0x10 == 0x10 {
-                cubintbl["Symbols"][&symname] = syment.clone().into();
+                cubin.table["Symbols"][&symname] = syment.clone().into();
                 continue;
             }
             // Skip sections not tagged FUNC
             if syment.info() & 0x0f != 0x02 {
                 continue;
             }
-            cubintbl["Symbols"][&symname] = syment.clone().into();
+            cubin.table["Symbols"][&symname] = syment.clone().into();
 
             // Create a hash of kernels for output
             //my $kernelSec = $cubin->{Kernels}{$symEnt->{Name}} = $secHdr;
             //kernsecmap.insert(symname.clone(), sh.clone());
-            let mut kernel_secmap: HashMap<&'static str, SVal> = HashMap::new();
+            let mut kernel_sec = KernelSection::default();
 
             // Extract local/global/weak binding info
-            kernel_secmap.insert("Linkage", SYMBIND[((syment.info() & 0xf0) >> 4)].into());
+            kernel_sec.linkage = SYMBIND[((syment.info() & 0xf0) >> 4)];
+            // Extract the max barrier resource identifier used and add 1. Should be 0-16.
+            // If a register is used as a barrier resource id, then this value is the max of 16.
+            kernel_sec.bar_cnt = ((flags & 0x01f00000) >> 20) as u32;
+            // Extract the number of allocated registers for this kernel.
+            kernel_sec.reg_cnt = ((info & 0xff000000) >> 24) as u32;
             // Extract the kernel instructions
             let data = match shval {
                 &SecHdr::Other(_, ref data) => data,
                 _ => panic!("unexpected hdr: {:?}", shval),
             };
-            kernel_secmap.insert("Data", data.clone().into());
-            // Extract the max barrier resource identifier used and add 1. Should be 0-16.
-            // If a register is used as a barrier resource id, then this value is the max of 16.
-            kernel_secmap.insert("BarCnt", (((flags & 0x01f00000) >> 20) as u32).into());
-            // Extract the number of allocated registers for this kernel.
-            kernel_secmap.insert("RegCnt", (((info & 0xff000000) >> 24) as u32).into());
+            kernel_sec.map.insert("Data", data.clone().into());
 
             // Extract the size of shared memory this kernel uses.
             let shared_name = format!(".nv.shared.{}", symname);
@@ -221,11 +225,12 @@ impl Cubin {
             } else {
                 (0, None)
             };
-            //kernel_sec.insert("SharedSec", shared_sec.clone().into());
-            kernel_secmap.insert("SharedSize", (size as u32).into());
+            kernel_sec.shared_sec = shared_sec;
+            kernel_sec.shared_size = size as u32;
 
             // Attach constant0 section
             let &(ref constsh, ref constant_sec) = &shdrmap[&format!(".nv.constant0.{}", symname)];
+            kernel_sec.constant_sec = constant_sec.clone();
 
             // Extract the kernel parameter data.
             let infoname = format!(".nv.info.{}", symname);
@@ -240,17 +245,18 @@ impl Cubin {
                 },
                 _ => panic!("got unexpected hdr type: {:?}", paramshval),
             };
-            kernel_secmap.insert("ParamSec", Self::extract_param_sec(data).into());
-            let kernel_sec = KernelSection {
-                name: symname.clone(),
-                shared_sec: shared_sec,
-                constant_sec: constant_sec.clone(),
-                map: kernel_secmap,
-            };
-            cubintbl["Kernels"][&symname] = kernel_sec.into();
+            let params = Self::extract_param_sec(data);
+            kernel_sec.param_cnt = params.len();
+            kernel_sec.map.insert("ParamSec", params.into());
+            cubin.table["Kernels"][&symname] = kernel_sec.into();
         }
-
-        Ok(Cubin { table: cubintbl })
+        Ok(cubin)
+    }
+    pub fn list_kernels(&self) -> MutStrMap<SVal> {
+        self.table["Kernels"].clone()
+    }
+    pub fn list_symbols(&self) -> MutStrMap<SVal> {
+        self.table["Symbols"].clone()
     }
     fn extract_param_sec(data: Vec<u32>) -> MutStrMap<SVal> {
         let mut param_sec = MutStrMap::new();
