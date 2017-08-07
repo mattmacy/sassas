@@ -50,6 +50,7 @@ impl<K: Hash + Eq + Clone + Debug, V: Default> IndexMut<K> for MutMap<K, V> {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct MutStrMap<V: Default> {
     map: MutMap<String, V>,
 }
@@ -72,24 +73,24 @@ impl<V: Default> MutStrMap<V> {
     }
 }
 
-impl<V: Default> Index<String> for MutStrMap<V> {
+impl<'a, V: Default> Index<&'a String> for MutStrMap<V> {
     type Output = V;
-    fn index(&self, idx: String) -> &Self::Output {
-        &self.map[idx]
+    fn index(&self, idx: &String) -> &Self::Output {
+        &self.map[idx.clone()]
     }
 }
-impl<V: Default> Index<&'static str> for MutStrMap<V> {
+impl<'a, V: Default> Index<&'static str> for MutStrMap<V> {
     type Output = V;
     fn index(&self, idx: &'static str) -> &Self::Output {
         &self.map[idx.into()]
     }
 }
-impl<V: Default> IndexMut<String> for MutStrMap<V> {
-    fn index_mut(&mut self, idx: String) -> &mut Self::Output {
-        &mut self.map[idx]
+impl<'a, V: Default> IndexMut<&'a String> for MutStrMap<V> {
+    fn index_mut(&mut self, idx: &String) -> &mut Self::Output {
+        &mut self.map[idx.clone()]
     }
 }
-impl<V: Default> IndexMut<&'static str> for MutStrMap<V> {
+impl<'a, V: Default> IndexMut<&'static str> for MutStrMap<V> {
     fn index_mut(&mut self, idx: &'static str) -> &mut Self::Output {
         &mut self.map[idx.into()]
     }

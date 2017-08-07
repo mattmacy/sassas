@@ -3,6 +3,7 @@
 extern crate clap;
 extern crate memmap;
 extern crate itertools;
+extern crate num;
 
 use clap::{App, Arg, SubCommand};
 mod elf;
