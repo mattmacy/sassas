@@ -1,6 +1,6 @@
 
 use memmap::{Mmap, Protection};
-use std::{io, slice};
+use std::{io, slice, mem};
 use std::collections::{VecDeque, HashMap};
 use itertools::zip;
 use sval::{SVal, SymBind, KernelSection, SecHdr, ElfSymbol};
@@ -23,6 +23,20 @@ enum ElfSecHdrs {
 }
 
 impl Cubin {
+    fn build_strtab(data: &[u8]) -> SecHdr {
+        let strtab = data.split(|ch| *ch == b'\0')
+            .map(|slice| String::from_utf8(slice.to_vec()).unwrap())
+            .collect::<Vec<String>>();
+        let mut idx = 0;
+        let mut strmap: HashMap<usize, String> = HashMap::new();
+        for s in strtab {
+            let len = s.len();
+            strmap.insert(idx, s.clone());
+            idx += len + 1;
+        }
+        SecHdr::StrTab(strmap, data.to_vec())
+
+    }
     pub fn new(file: &String) -> io::Result<Self> {
         let fp = Mmap::open_path(file, Protection::Read)?;
         let elf32_hdr = unsafe { &*(fp.ptr() as *const Elf32_Ehdr) as &Elf32_Ehdr };
@@ -55,7 +69,7 @@ impl Cubin {
                              slice::from_raw_parts(fp.ptr().offset(off) as *const Elf32_Phdr, len)
                          }).to_vec();
             cubin.table["Fields"]["prgHdrs"] = phdrs.into();
-            let (off, len) = (hdr.e_shoff as isize, hdr.e_shentsize as usize);
+            let (off, len) = (hdr.e_shoff as isize, hdr.e_shnum as usize);
             let shdrs = (unsafe {
                              slice::from_raw_parts(fp.ptr().offset(off) as *const Elf32_Shdr, len)
                          }).to_vec();
@@ -69,12 +83,7 @@ impl Cubin {
                     continue;
                 }
                 let sh = match shdr.sh_type {
-                    elf::SHT_STRTAB => {
-                        let strtab = data.split(|ch| *ch == b'\0')
-                            .map(|slice| String::from_utf8(slice.to_vec()).unwrap())
-                            .collect::<Vec<String>>();
-                        SecHdr::StrTab(strtab, data.to_vec())
-                    }
+                    elf::SHT_STRTAB => Self::build_strtab(data),
                     elf::SHT_SYMTAB => {
                         let mut v = Vec::new();
                         let mut offset = 0;
@@ -98,14 +107,17 @@ impl Cubin {
             cubin.class = 64;
             cubin.arch = (hdr.e_flags & 0xff) as u32;
             cubin.addr_size = if hdr.e_flags & 0x400 == 0x400 { 64 } else { 32 };
-            let (off, len) = (hdr.e_phoff as isize, hdr.e_phentsize as usize);
+            let (off, len) = (hdr.e_phoff as isize, hdr.e_phnum as usize);
             let phdrs = (unsafe {
                              slice::from_raw_parts(fp.ptr().offset(off) as *const Elf64_Phdr, len)
                          }).to_vec();
             cubin.table["Fields"]["prgHdrs"] = phdrs.into();
             let (off, len) = (hdr.e_shoff as isize, hdr.e_shentsize as usize);
             let shdrs = (unsafe {
-                             slice::from_raw_parts(fp.ptr().offset(off) as *const Elf64_Shdr, len)
+                             slice::from_raw_parts(
+                    fp.ptr().offset(off) as *const Elf64_Shdr,
+                    hdr.e_shnum as usize,
+                )
                          }).to_vec();
             elf_shdrs = ElfSecHdrs::Elf64Shdrs(shdrs.clone());
             cubin.table["Fields"]["secHdrs"] = shdrs.clone().into();
@@ -117,12 +129,7 @@ impl Cubin {
                     continue;
                 }
                 let sh = match shdr.sh_type {
-                    elf::SHT_STRTAB => {
-                        let strtab = data.split(|ch| *ch == b'\0')
-                            .map(|slice| String::from_utf8(slice.to_vec()).unwrap())
-                            .collect::<Vec<String>>();
-                        SecHdr::StrTab(strtab, data.to_vec())
-                    }
+                    elf::SHT_STRTAB => Self::build_strtab(data),
                     elf::SHT_SYMTAB => {
                         let mut v = Vec::new();
                         let mut offset = 0;
@@ -141,22 +148,31 @@ impl Cubin {
                 shdrvals.push(sh);
             }
         }
-        let strtab = match shdrvals[stridx as usize] {
+
+        let shstrtab = match shdrvals[stridx as usize] {
             SecHdr::StrTab(ref v, _) => v.clone(),
-            _ => panic!("strtab not found"),
+            _ => panic!("strtab not found {:?}", shdrvals[stridx as usize]),
         };
         let mut shdrmap: HashMap<String, (SVal, SecHdr)> = HashMap::new();
         match elf_shdrs {
             ElfSecHdrs::Elf32Shdrs(ref shdrs) => {
                 for (shdr, sh) in zip(shdrs, &shdrvals) {
-                    let name = strtab[shdr.sh_name as usize].clone();
+                    let namidx = shdr.sh_name as usize;
+                    if namidx == 0 {
+                        continue;
+                    }
+                    let name = shstrtab[&namidx].clone();
                     shdrmap.insert(name.clone(), (shdr.clone().into(), sh.clone()));
                     cubin.table["SecHdrs"][&name] = sh.clone().into();
                 }
             }
             ElfSecHdrs::Elf64Shdrs(ref shdrs) => {
                 for (shdr, sh) in zip(shdrs, &shdrvals) {
-                    let name = strtab[shdr.sh_name as usize].clone();
+                    let namidx = shdr.sh_name as usize;
+                    if namidx == 0 {
+                        continue;
+                    }
+                    let name = shstrtab[&namidx].clone();
                     shdrmap.insert(name.clone(), (shdr.clone().into(), sh.clone()));
                     cubin.table["SecHdrs"][&name] = sh.clone().into();
                 }
@@ -168,8 +184,13 @@ impl Cubin {
             &SecHdr::SymTab(ref t, _) => t,
             _ => panic!("expect Symtab"),
         };
+        let &(_, ref strtab_) = &shdrmap[".strtab"];
+        let strtab = match strtab_ {
+            &SecHdr::StrTab(ref v, _) => v.clone(),
+            _ => panic!("strtab not found {:?}", strtab_),
+        };
         for syment in symtab {
-            let symname = strtab[syment.name()].clone();
+            let symname = strtab[&syment.name()].clone();
             let (flags, info, size) = match elf_shdrs {
                 ElfSecHdrs::Elf32Shdrs(ref shdrs) => {
                     let shdr = &shdrs[syment.shndx()];
@@ -183,7 +204,6 @@ impl Cubin {
             let shval = &shdrvals[syment.shndx()];
             if syment.info() & 0x10 == 0x10 {
                 cubin.table["Symbols"][&symname] = syment.clone().into();
-                continue;
             }
             // Skip sections not tagged FUNC
             if syment.info() & 0x0f != 0x02 {
@@ -233,13 +253,22 @@ impl Cubin {
             let infoname = format!(".nv.info.{}", symname);
 
             if !shdrmap.contains_key(&infoname) {
+                println!("{}: not found", symname);
                 continue;
             }
             let &(ref paramsh, ref paramshval) = &shdrmap[&infoname];
-            let data = match paramshval {
-                &SecHdr::Other(_, ref data) => unsafe {
-                    ::std::mem::transmute::<Vec<u8>, Vec<u32>>(data.clone())
-                },
+            let data: Vec<u32> = match paramshval {
+                &SecHdr::Other(_, ref data) => {
+                    let mut data = data.clone();
+                    let capacity = data.capacity();
+                    let (ptr, len, capacity) = {
+                        let slice = &mut data[..];
+                        (slice.as_mut_ptr() as _, slice.len() / 4, capacity / 4)
+                    };
+                    assert!(ptr as usize % 4 == 0); // check alignment
+                    mem::forget(data); // bye bye!
+                    unsafe { Vec::from_raw_parts(ptr, len, capacity) }
+                }
                 _ => panic!("got unexpected hdr type: {:?}", paramshval),
             };
             let params = Self::extract_param_sec(data);
@@ -288,9 +317,14 @@ impl Cubin {
         while idx < data.len() {
             let code = data[idx] & 0xFFFF;
             let size = data[idx] >> 16;
-            let step = (size / 4) as usize;
-            idx += 1;
-            let slice = data[idx..idx + step].to_vec();
+            let (step, slice) = match code {
+                0x0401 | 0x1b03 => (1, vec![]),
+                _ => {
+                    let step = (size / 4) as usize;
+                    (step + 1, data[idx..idx + step].to_vec())
+                }
+            };
+            idx += step;
             match code {
                 // EIATTR_MAXREG_COUNT
                 0x1b03 => param_sec.insert("MAXREG_COUNT", size.into()),
@@ -311,7 +345,6 @@ impl Cubin {
                     None
                 }
             };
-            idx += step;
         }
         param_sec
     }

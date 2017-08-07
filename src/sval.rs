@@ -49,7 +49,7 @@ impl ElfSymbol {
 
 #[derive(Clone, Debug)]
 pub enum SecHdr {
-    StrTab(Vec<String>, Vec<u8>),
+    StrTab(HashMap<usize, String>, Vec<u8>),
     SymTab(Vec<ElfSymbol>, Vec<u8>),
     Empty,
     Other(u32, Vec<u8>),
