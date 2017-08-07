@@ -5,10 +5,16 @@ extern crate memmap;
 extern crate itertools;
 extern crate num;
 
+use std::process::{Command, Stdio};
 use clap::{App, Arg, SubCommand};
 use std::io;
+use cubin::Cubin;
+use std::io::{Read, Write, BufRead, BufReader};
+use std::fs::File;
+
 mod elf;
 mod cubin;
+mod maxas;
 mod sval;
 mod unsafe_lib;
 
@@ -175,7 +181,31 @@ fn sass_list(file: &String) -> io::Result<()> {
     }
     Ok(())
 }
-fn sass_test(reg: bool, all: bool, file: String) -> io::Result<()> {
+fn sass_test(reg: bool, all: bool, file: &String) -> io::Result<()> {
+    let mut fp: Box<BufRead>;
+    if Cubin::is_elf(file)? {
+        let mut first_line = String::new();
+        let bin = cubin::Cubin::new(file)?;
+        let arch = bin.arch;
+        let mut child = Command::new("cuobjdump")
+            .arg(format!(" -arch sm_{}", arch))
+            .arg(format!(" -sass {}", file))
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("cuobjdump failed");
+        let fh = child.stdout.take().unwrap();
+        fp = Box::new(BufReader::new(fh));
+        let buf =
+            String::from_utf8(fp.fill_buf()?.to_vec()).expect("failed to convert output to string");
+        if buf.contains("cuobjdump fatal") {
+            println!("{}", first_line);
+            std::process::exit(1);
+        }
+    } else {
+        let fh = File::open(file)?;
+        fp = Box::new(BufReader::<File>::new(fh));
+    }
+    maxas::test(fp, reg, all)?;
     Ok(())
 }
 fn sass_extract(kernel_name: Option<String>, file: String) -> io::Result<()> {
@@ -196,7 +226,7 @@ fn main() {
     let args = parse_args();
     match args {
         CmdArgs::List(ref file) => sass_list(file),
-        CmdArgs::Test(reg, all, file) => sass_test(reg, all, file),
+        CmdArgs::Test(reg, all, ref file) => sass_test(reg, all, file),
         CmdArgs::Extract(kernel, file) => sass_extract(kernel, file),
         CmdArgs::Pre(debug, asm_file, new_asm_file) => sass_pre(debug, asm_file, new_asm_file),
         CmdArgs::Insert(noreuse, asm_file, new_asm_file) => {
