@@ -170,17 +170,14 @@ impl Cubin {
         };
         for syment in symtab {
             let symname = strtab[syment.name()].clone();
-            let (flags, info) = match elf_shdrs {
+            let (flags, info, size) = match elf_shdrs {
                 ElfSecHdrs::Elf32Shdrs(ref shdrs) => {
                     let shdr = &shdrs[syment.shndx()];
-                    (
-                        <u64 as ::num::NumCast>::from(shdr.sh_flags).unwrap(),
-                        shdr.sh_info,
-                    ) as (u64, u32)
+                    (shdr.sh_flags as u64, shdr.sh_info, shdr.sh_size as u64)
                 }
                 ElfSecHdrs::Elf64Shdrs(ref shdrs) => {
                     let shdr = &shdrs[syment.shndx()];
-                    (shdr.sh_flags, shdr.sh_info) as (u64, u32)
+                    (shdr.sh_flags, shdr.sh_info, shdr.sh_size)
                 }
             };
             let shval = &shdrvals[syment.shndx()];

@@ -159,7 +159,19 @@ fn sass_list(file: &String) -> io::Result<()> {
     );
     for (k, v) in kernels.iter() {
         let ker: sval::KernelSection = v.clone().into();
-        //        println!("Kernel: {} (Linkage: {:?}, Params: {}, Size: {}, Registers: {}, SharedMem: {}, Barriers: {}", k, )
+        println!(
+            "Kernel: {} (Linkage: {:?}, Params: {}, Size: {}, Registers: {}, SharedMem: {}, Barriers: {}",
+            k,
+            ker.linkage,
+            ker.param_cnt,
+            ker.size,
+            ker.reg_cnt,
+            ker.shared_size,
+            ker.bar_cnt
+        )
+    }
+    for (k, _) in symbols.iter() {
+        println!("Symbol: {}", k)
     }
     Ok(())
 }

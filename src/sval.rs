@@ -12,6 +12,7 @@ pub struct KernelSection {
     pub reg_cnt: u32,
     pub shared_size: u32,
     pub param_cnt: usize,
+    pub size: u64,
     pub map: HashMap<&'static str, SVal>,
 }
 
