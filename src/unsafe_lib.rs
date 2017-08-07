@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::cell::RefCell;
 use std::hash::Hash;
+use std::collections::hash_map::Iter;
 use std::ops::{Index, IndexMut};
 use std::fmt::Debug;
 
@@ -8,7 +9,21 @@ use std::fmt::Debug;
 pub struct MutMap<K: Eq + Hash, V: Default> {
     map: HashMap<K, RefCell<V>>,
 }
-
+pub struct MutMapIter<'a, K: 'a, V: 'a + Default> {
+    iter: Iter<'a, K, RefCell<V>>,
+}
+impl<'a, K, V: Default + Clone> Iterator for MutMapIter<'a, K, V> {
+    type Item = (&'a K, V);
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.iter.next() {
+            None => None,
+            Some((k, rv)) => {
+                let v = rv.borrow().clone();
+                Some((k, v))
+            }
+        }
+    }
+}
 impl<K: Eq + Hash, V: Default> Default for MutMap<K, V> {
     fn default() -> Self {
         Self::new()
@@ -18,6 +33,12 @@ impl<K: Eq + Hash, V: Default> Default for MutMap<K, V> {
 impl<K: Eq + Hash, V: Default> MutMap<K, V> {
     pub fn new() -> Self {
         MutMap { map: HashMap::new() }
+    }
+    pub fn iter(&self) -> MutMapIter<K, V> {
+        MutMapIter { iter: self.map.iter() }
+    }
+    pub fn len(&self) -> usize {
+        self.map.len()
     }
     pub fn insert(&mut self, k: K, v: V) -> Option<V> {
         let result = self.map.insert(k, RefCell::new(v));
@@ -64,6 +85,12 @@ impl<V: Default> Default for MutStrMap<V> {
 impl<V: Default> MutStrMap<V> {
     pub fn new() -> Self {
         MutStrMap { map: MutMap::new() }
+    }
+    pub fn iter(&self) -> MutMapIter<String, V> {
+        self.map.iter()
+    }
+    pub fn len(&self) -> usize {
+        self.map.len()
     }
     pub fn insert<S>(&mut self, k: S, v: V) -> Option<V>
     where
