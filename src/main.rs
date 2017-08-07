@@ -84,13 +84,8 @@ fn parse_args() -> CmdArgs {
             }
         }
         ("test", Some(sub_m)) => {
-            let (mut reg, mut all) = (false, false);
-            if sub_m.is_present("reg") {
-                reg = true;
-            }
-            if sub_m.is_present("all") {
-                all = true;
-            }
+            let reg = sub_m.is_present("reg");
+            let all = sub_m.is_present("all");
             if let Some(file) = sub_m.value_of("cubin_or_sass_file") {
                 CmdArgs::Test(reg, all, file.into())
             } else {
@@ -109,10 +104,7 @@ fn parse_args() -> CmdArgs {
             }
         }
         ("pre", Some(sub_m)) => {
-            let mut debug = false;
-            if sub_m.is_present("debug") {
-                debug = true;
-            }
+            let debug = sub_m.is_present("debug");
             let asm_file = match sub_m.value_of("asm_file") {
                 Some(file) => Some(file.into()),
                 None => None,
@@ -127,10 +119,7 @@ fn parse_args() -> CmdArgs {
             }
         }
         ("insert", Some(sub_m)) => {
-            let mut noreuse = false;
-            if sub_m.is_present("noreuse") {
-                noreuse = true;
-            }
+            let noreuse = sub_m.is_present("noreuse");
             let asm_file = match sub_m.value_of("asm_file") {
                 Some(file) => Some(file.into()),
                 None => None,
@@ -184,7 +173,6 @@ fn sass_list(file: &String) -> io::Result<()> {
 fn sass_test(reg: bool, all: bool, file: &String) -> io::Result<()> {
     let mut fp: Box<BufRead>;
     if Cubin::is_elf(file)? {
-        let mut first_line = String::new();
         let bin = cubin::Cubin::new(file)?;
         let arch = bin.arch;
         let mut child = Command::new("cuobjdump")
@@ -198,7 +186,7 @@ fn sass_test(reg: bool, all: bool, file: &String) -> io::Result<()> {
         let buf =
             String::from_utf8(fp.fill_buf()?.to_vec()).expect("failed to convert output to string");
         if buf.contains("cuobjdump fatal") {
-            println!("{}", first_line);
+            println!("{}", buf);
             std::process::exit(1);
         }
     } else {

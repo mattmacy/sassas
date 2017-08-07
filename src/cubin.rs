@@ -103,7 +103,7 @@ impl Cubin {
                                 &*(fp.ptr().offset(off + offset as isize) as *const Elf32_Sym) as
                                     &Elf32_Sym
                             };
-                            v.push(ElfSymbol::Sym32(sym.clone()));
+                            v.push(ElfSymbol::Sym32(*sym));
                             offset += shdr.sh_entsize;
                         }
                         SecHdr::SymTab(v, data.to_vec())
@@ -149,7 +149,7 @@ impl Cubin {
                                 &*(fp.ptr().offset(off + offset as isize) as *const Elf64_Sym) as
                                     &Elf64_Sym
                             };
-                            v.push(ElfSymbol::Sym64(sym.clone()));
+                            v.push(ElfSymbol::Sym64(*sym));
                             offset += shdr.sh_entsize;
                         }
                         SecHdr::SymTab(v, data.to_vec())
@@ -173,7 +173,8 @@ impl Cubin {
                         continue;
                     }
                     let name = shstrtab[&namidx].clone();
-                    shdrmap.insert(name.clone(), (shdr.clone().into(), sh.clone()));
+                    //                    let sval : SVal = *shdr.into();
+                    shdrmap.insert(name.clone(), ((*shdr).into(), sh.clone()));
                     cubin.table["SecHdrs"][&name] = sh.clone().into();
                 }
             }
@@ -184,7 +185,7 @@ impl Cubin {
                         continue;
                     }
                     let name = shstrtab[&namidx].clone();
-                    shdrmap.insert(name.clone(), (shdr.clone().into(), sh.clone()));
+                    shdrmap.insert(name.clone(), ((*shdr).into(), sh.clone()));
                     cubin.table["SecHdrs"][&name] = sh.clone().into();
                 }
             }
@@ -231,9 +232,9 @@ impl Cubin {
             kernel_sec.linkage = SYMBIND[((syment.info() & 0xf0) >> 4)];
             // Extract the max barrier resource identifier used and add 1. Should be 0-16.
             // If a register is used as a barrier resource id, then this value is the max of 16.
-            kernel_sec.bar_cnt = ((flags & 0x01f00000) >> 20) as u32;
+            kernel_sec.bar_cnt = ((flags & 0x01f0_0000) >> 20) as u32;
             // Extract the number of allocated registers for this kernel.
-            kernel_sec.reg_cnt = ((info & 0xff000000) >> 24) as u32;
+            kernel_sec.reg_cnt = ((info & 0xff00_0000) >> 24) as u32;
             // Extract the kernel instructions
             let data = match shval {
                 &SecHdr::Other(_, ref data) => data,
@@ -304,13 +305,13 @@ impl Cubin {
         param_sec.insert("ParamHex", hex32.into());
         // find the first param delimiter
         let mut idx = 0;
-        while idx < data.len() && data[idx] != 0x00080a04 {
+        while idx < data.len() && data[idx] != 0x0008_0a04 {
             idx += 1;
         }
         let first = data[idx + 2] & 0xFFFF;
         idx += 4;
         let mut params = VecDeque::new();
-        while idx < data.len() && data[idx] == 0x000c1704 {
+        while idx < data.len() && data[idx] == 0x000c_1704 {
             let ord = data[idx + 2] & 0xFFFF;
             let offset = format!("0x{:02x}", first + (data[idx + 2] >> 16));
             let psize = data[idx + 3] >> 18;
