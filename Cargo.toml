@@ -8,6 +8,7 @@ build = "build.rs"
 clap = "2.24"
 memmap = "^0.5"
 itertools= "0.6"
+num = "^0.1"
 
 [build-dependencies]
 bindgen = "^0.23.1"
