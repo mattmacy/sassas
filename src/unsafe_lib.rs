@@ -9,6 +9,12 @@ pub struct MutMap<K: Eq + Hash, V: Default> {
     map: HashMap<K, RefCell<V>>,
 }
 
+impl<K: Eq + Hash, V: Default> Default for MutMap<K, V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<K: Eq + Hash, V: Default> MutMap<K, V> {
     pub fn new() -> Self {
         MutMap { map: HashMap::new() }
@@ -41,5 +47,50 @@ impl<K: Hash + Eq + Clone + Debug, V: Default> IndexMut<K> for MutMap<K, V> {
         }
         let cntp = map[&idx].as_ptr();
         unsafe { &mut *cntp }
+    }
+}
+
+pub struct MutStrMap<V: Default> {
+    map: MutMap<String, V>,
+}
+
+impl<V: Default> Default for MutStrMap<V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<V: Default> MutStrMap<V> {
+    pub fn new() -> Self {
+        MutStrMap { map: MutMap::new() }
+    }
+    pub fn insert<S>(&mut self, k: S, v: V) -> Option<V>
+    where
+        S: Into<String>,
+    {
+        self.map.insert(k.into(), v)
+    }
+}
+
+impl<V: Default> Index<String> for MutStrMap<V> {
+    type Output = V;
+    fn index(&self, idx: String) -> &Self::Output {
+        &self.map[idx]
+    }
+}
+impl<V: Default> Index<&'static str> for MutStrMap<V> {
+    type Output = V;
+    fn index(&self, idx: &'static str) -> &Self::Output {
+        &self.map[idx.into()]
+    }
+}
+impl<V: Default> IndexMut<String> for MutStrMap<V> {
+    fn index_mut(&mut self, idx: String) -> &mut Self::Output {
+        &mut self.map[idx]
+    }
+}
+impl<V: Default> IndexMut<&'static str> for MutStrMap<V> {
+    fn index_mut(&mut self, idx: &'static str) -> &mut Self::Output {
+        &mut self.map[idx.into()]
     }
 }
