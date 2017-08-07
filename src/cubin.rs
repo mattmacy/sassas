@@ -23,6 +23,17 @@ enum ElfSecHdrs {
 }
 
 impl Cubin {
+    pub fn is_elf(file: &String) -> io::Result<bool> {
+        let fp = Mmap::open_path(file, Protection::Read)?;
+        let hdr_ref: Vec<u8> = vec![0x7f, 0x45, 0x4c, 0x46];
+        let hdr = (unsafe { slice::from_raw_parts(fp.ptr() as *const u8, 4) }).to_vec();
+        for (h, hr) in zip(hdr, hdr_ref) {
+            if h != hr {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
     fn build_strtab(data: &[u8]) -> SecHdr {
         let strtab = data.split(|ch| *ch == b'\0')
             .map(|slice| String::from_utf8(slice.to_vec()).unwrap())
