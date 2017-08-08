@@ -64,13 +64,13 @@ impl<'a, K, V: Default + Clone> Iterator for Values<'a, K, V> {
 }
 
 
-impl<K: Eq + Hash, V: Default> Default for MutMap<K, V> {
+impl<K: Eq + Hash + Clone + Debug, V: Default> Default for MutMap<K, V> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<K: Eq + Hash, V: Default> MutMap<K, V> {
+impl<K: Eq + Hash + Clone + Debug, V: Default> MutMap<K, V> {
     pub fn new() -> Self {
         MutMap { map: HashMap::new() }
     }
@@ -79,6 +79,14 @@ impl<K: Eq + Hash, V: Default> MutMap<K, V> {
     }
     pub fn len(&self) -> usize {
         self.map.len()
+    }
+    pub fn get(&self, idx: &K) -> Option<&V> {
+        if self.map.contains_key(idx) {
+            Some(&self.index(idx))
+        } else {
+            None
+        }
+
     }
     pub fn insert(&mut self, k: K, v: V) -> Option<V> {
         let result = self.map.insert(k, RefCell::new(v));
@@ -89,21 +97,21 @@ impl<K: Eq + Hash, V: Default> MutMap<K, V> {
     }
 }
 
-impl<K: Hash + Eq + Clone + Debug, V: Default> Index<K> for MutMap<K, V> {
+impl<'a, K: Hash + Eq + Clone + Debug, V: Default> Index<&'a K> for MutMap<K, V> {
     type Output = V;
-    fn index(&self, idx: K) -> &Self::Output {
+    fn index(&self, idx: &K) -> &Self::Output {
         let map = &self.map;
-        if !map.contains_key(&idx) {
+        if !map.contains_key(idx) {
             panic!("{:?} not found", idx)
         }
-        let cntp = map[&idx].as_ptr();
+        let cntp = map[idx].as_ptr();
         unsafe { &*cntp }
     }
 }
-impl<K: Hash + Eq + Clone + Debug, V: Default> IndexMut<K> for MutMap<K, V> {
-    fn index_mut(&mut self, idx: K) -> &mut Self::Output {
+impl<'a, K: Hash + Eq + Clone + Debug, V: Default> IndexMut<&'a K> for MutMap<K, V> {
+    fn index_mut(&mut self, idx: &K) -> &mut Self::Output {
         let map = &mut self.map;
-        if !map.contains_key(&idx) {
+        if !map.contains_key(idx) {
             map.insert(idx.clone(), RefCell::new(V::default()));
         }
         let cntp = map[&idx].as_ptr();
@@ -138,6 +146,9 @@ impl<V: Default> MutStrMap<V> {
     pub fn len(&self) -> usize {
         self.map.len()
     }
+    pub fn get(&self, name: &String) -> Option<&V> {
+        self.map.get(name)
+    }
     pub fn insert<S>(&mut self, k: S, v: V) -> Option<V>
     where
         S: Into<String>,
@@ -149,22 +160,22 @@ impl<V: Default> MutStrMap<V> {
 impl<'a, V: Default> Index<&'a String> for MutStrMap<V> {
     type Output = V;
     fn index(&self, idx: &String) -> &Self::Output {
-        &self.map[idx.clone()]
+        &self.map[idx]
     }
 }
 impl<'a, V: Default> Index<&'static str> for MutStrMap<V> {
     type Output = V;
     fn index(&self, idx: &'static str) -> &Self::Output {
-        &self.map[idx.into()]
+        &self.map[&idx.into()]
     }
 }
 impl<'a, V: Default> IndexMut<&'a String> for MutStrMap<V> {
     fn index_mut(&mut self, idx: &String) -> &mut Self::Output {
-        &mut self.map[idx.clone()]
+        &mut self.map[idx]
     }
 }
 impl<'a, V: Default> IndexMut<&'static str> for MutStrMap<V> {
     fn index_mut(&mut self, idx: &'static str) -> &mut Self::Output {
-        &mut self.map[idx.into()]
+        &mut self.map[&idx.into()]
     }
 }
