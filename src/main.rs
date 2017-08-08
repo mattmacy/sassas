@@ -4,7 +4,9 @@ extern crate clap;
 extern crate memmap;
 extern crate itertools;
 extern crate num;
+extern crate regex;
 
+use regex::Regex;
 use std::process::{Command, Stdio};
 use clap::{App, Arg, SubCommand};
 use std::io;
@@ -74,7 +76,7 @@ fn parse_args() -> CmdArgs {
 					performance without any reuse or you can use it to set the flags manually in your sass.")
 			.arg(Arg::with_name("noreuse").long("noreuse").short("n").required(false).takes_value(true))
 			.arg(Arg::with_name("cubin_file").index(1))
-			.arg(Arg::with_name("new_cubin_file").index(2).required(false)))
+			.arg(Arg::with_name("new_cubin_file").required(false).index(2)))
 			.get_matches();
 
     match matches.subcommand() {
@@ -300,8 +302,9 @@ fn sass_insert(noreuse: bool, asm_file: &String, new_asm_file: &Option<String>) 
     let mut fp = Box::new(BufReader::<File>::new(fh));
     let buf =
         String::from_utf8(fp.fill_buf()?.to_vec()).expect("failed to convert input file to string");
-
-
+    let re = Regex::new(r"^# Kernel: (\w+)").unwrap();
+    let kernel_name = &re.captures_iter(&buf).nth(0).unwrap()[0];
+    println!("kernel_name: {}", kernel_name);
     Ok(())
 }
 
