@@ -1,6 +1,6 @@
 use elf::{Elf32_Phdr, Elf32_Shdr, Elf32_Sym, Elf64_Phdr, Elf64_Shdr, Elf64_Sym};
 use unsafe_lib::MutStrMap;
-use std::collections::HashMap;
+use std::collections::{VecDeque, HashMap};
 
 #[derive(Clone, Debug, Default)]
 pub struct KernelSection {
@@ -88,6 +88,7 @@ pub enum SVal {
     Elf64Shdr(Elf64_Shdr),
     KernelSection(KernelSection),
     StrVec(Vec<String>),
+    StrVecDeq(VecDeque<String>),
     SecHdr(SecHdr),
     SymBind(SymBind),
     ElfSymbol(ElfSymbol),
@@ -145,5 +146,6 @@ impl_from!(SecHdr, SecHdr);
 impl_from!(Vec<u8>, Data);
 impl_from!(Vec<u32>, DataL);
 impl_from!(Vec<String>, StrVec);
+impl_from!(VecDeque<String>, StrVecDeq);
 impl_from!(SymBind, SymBind);
 impl_from!(MutStrMap<SVal>, Map);

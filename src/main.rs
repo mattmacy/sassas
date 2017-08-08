@@ -10,6 +10,7 @@ use clap::{App, Arg, SubCommand};
 use std::io;
 use cubin::Cubin;
 use std::path::Path;
+use std::collections::VecDeque;
 use std::io::{Read, Write, BufRead, BufReader};
 use std::fs::File;
 
@@ -241,6 +242,8 @@ fn sass_extract(
         format_args!("# SharedSize: {}", kernel.shared_size),
     )?;
     out.write_fmt(format_args!("# BarCnt: {}", kernel.bar_cnt))?;
+    let params: &VecDeque<String> = (&kernel.map["Params"]).into();
+
     Ok(())
 }
 fn sass_pre(debug: bool, asm_file: &String, new_asm_file: &Option<String>) -> io::Result<()> {

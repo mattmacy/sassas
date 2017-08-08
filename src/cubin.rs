@@ -325,6 +325,7 @@ impl Cubin {
             idx += 4;
         }
         let static_params = data[0..idx - 1].to_vec();
+        param_sec.insert("Params", params.into());
         param_sec.insert("StaticParams", static_params.into());
         while idx < data.len() {
             let code = data[idx] & 0xFFFF;
