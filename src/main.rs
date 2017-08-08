@@ -142,6 +142,30 @@ fn parse_args() -> CmdArgs {
     }
 }
 
+fn do_cuobjdump(arch: u32, file: &String, kernel: &Option<String>) -> io::Result<Box<BufRead>> {
+    let kernelcmd = match kernel {
+        &Some(ref kernel_name) => format!(" -fun {}", kernel_name),
+        &None => String::from(""),
+    };
+    let mut child = Command::new("cuobjdump")
+        .arg(format!(" -arch sm_{}", arch))
+        .arg(format!(" -sass {}", file))
+        .arg(kernelcmd)
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("cuobjdump failed");
+    let fh = child.stdout.take().unwrap();
+    let mut fp = Box::new(BufReader::new(fh));
+    let buf =
+        String::from_utf8(fp.fill_buf()?.to_vec()).expect("failed to convert output to string");
+    if buf.contains("cuobjdump fatal") {
+        println!("{}", buf);
+        std::process::exit(1);
+    }
+
+    Ok(fp)
+}
+
 fn sass_list(file: &String) -> io::Result<()> {
     let bin = cubin::Cubin::new(file)?;
     let (arch, class, addr_size) = (bin.arch, bin.class, bin.addr_size);
@@ -172,29 +196,7 @@ fn sass_list(file: &String) -> io::Result<()> {
     }
     Ok(())
 }
-fn do_cuobjdump(arch: u32, file: &String, kernel: &Option<String>) -> io::Result<Box<BufRead>> {
-    let kernelcmd = match kernel {
-        &Some(ref kernel_name) => format!(" -fun {}", kernel_name),
-        &None => String::from(""),
-    };
-    let mut child = Command::new("cuobjdump")
-        .arg(format!(" -arch sm_{}", arch))
-        .arg(format!(" -sass {}", file))
-        .arg(kernelcmd)
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("cuobjdump failed");
-    let fh = child.stdout.take().unwrap();
-    let mut fp = Box::new(BufReader::new(fh));
-    let buf =
-        String::from_utf8(fp.fill_buf()?.to_vec()).expect("failed to convert output to string");
-    if buf.contains("cuobjdump fatal") {
-        println!("{}", buf);
-        std::process::exit(1);
-    }
 
-    Ok(fp)
-}
 fn sass_test(reg: bool, all: bool, file: &String) -> io::Result<()> {
     let fp: Box<BufRead> = if Cubin::is_elf(file)? {
         let bin = cubin::Cubin::new(file)?;
@@ -207,7 +209,8 @@ fn sass_test(reg: bool, all: bool, file: &String) -> io::Result<()> {
     maxas::test(fp, reg, all)?;
     Ok(())
 }
-fn sass_extract(
+
+fn sass_extract_cubin(
     kernel_name: &Option<String>,
     cubin_file: &String,
     asm_file: &Option<String>,
@@ -257,9 +260,39 @@ fn sass_extract(
     maxas::extract(fp, out, params)?;
     Ok(())
 }
+fn sass_extract_sass(sass_file: &String, asm_file: &Option<String>) -> io::Result<()> {
+    let mut out = match *asm_file {
+        Some(ref x) => {
+            let path = Path::new(x);
+            Box::new(File::create(&path).unwrap()) as Box<Write>
+        }
+        None => Box::new(io::stdout()) as Box<Write>,
+    };
+    let fh = File::open(sass_file)?;
+    let fp = Box::new(BufReader::<File>::new(fh));
+    maxas::extract(fp, out, None)?;
+    Ok(())
+}
+
+fn sass_extract(
+    kernel_name: &Option<String>,
+    input_file: &String,
+    asm_file: &Option<String>,
+) -> io::Result<()> {
+    if Cubin::is_elf(input_file)? {
+        sass_extract_cubin(kernel_name, input_file, asm_file)?;
+    } else {
+        sass_extract_sass(input_file, asm_file)?;
+    }
+    Ok(())
+}
+
+
+
 fn sass_pre(debug: bool, asm_file: &String, new_asm_file: &Option<String>) -> io::Result<()> {
     Ok(())
 }
+
 fn sass_insert(noreuse: bool, asm_file: &String, new_asm_file: &Option<String>) -> io::Result<()> {
     Ok(())
 }
