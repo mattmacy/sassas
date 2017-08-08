@@ -9,6 +9,7 @@ use std::process::{Command, Stdio};
 use clap::{App, Arg, SubCommand};
 use std::io;
 use cubin::Cubin;
+use std::path::Path;
 use std::io::{Read, Write, BufRead, BufReader};
 use std::fs::File;
 
@@ -170,54 +171,95 @@ fn sass_list(file: &String) -> io::Result<()> {
     }
     Ok(())
 }
+fn do_cuobjdump(arch: u32, file: &String, kernel: &Option<String>) -> io::Result<Box<BufRead>> {
+    let kernelcmd = match kernel {
+        &Some(ref kernel_name) => format!(" -fun {}", kernel_name),
+        &None => String::from(""),
+    };
+    let mut child = Command::new("cuobjdump")
+        .arg(format!(" -arch sm_{}", arch))
+        .arg(format!(" -sass {}", file))
+        .arg(kernelcmd)
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("cuobjdump failed");
+    let fh = child.stdout.take().unwrap();
+    let mut fp = Box::new(BufReader::new(fh));
+    let buf =
+        String::from_utf8(fp.fill_buf()?.to_vec()).expect("failed to convert output to string");
+    if buf.contains("cuobjdump fatal") {
+        println!("{}", buf);
+        std::process::exit(1);
+    }
+
+    Ok(fp)
+}
 fn sass_test(reg: bool, all: bool, file: &String) -> io::Result<()> {
-    let mut fp: Box<BufRead>;
-    if Cubin::is_elf(file)? {
+    let fp: Box<BufRead> = if Cubin::is_elf(file)? {
         let bin = cubin::Cubin::new(file)?;
         let arch = bin.arch;
-        let mut child = Command::new("cuobjdump")
-            .arg(format!(" -arch sm_{}", arch))
-            .arg(format!(" -sass {}", file))
-            .stdout(Stdio::piped())
-            .spawn()
-            .expect("cuobjdump failed");
-        let fh = child.stdout.take().unwrap();
-        fp = Box::new(BufReader::new(fh));
-        let buf =
-            String::from_utf8(fp.fill_buf()?.to_vec()).expect("failed to convert output to string");
-        if buf.contains("cuobjdump fatal") {
-            println!("{}", buf);
-            std::process::exit(1);
-        }
+        do_cuobjdump(arch, file, &None)?
     } else {
         let fh = File::open(file)?;
-        fp = Box::new(BufReader::<File>::new(fh));
-    }
+        Box::new(BufReader::<File>::new(fh))
+    };
     maxas::test(fp, reg, all)?;
     Ok(())
 }
-fn sass_extract(kernel_name: Option<String>, file: String) -> io::Result<()> {
+fn sass_extract(
+    kernel_name: &Option<String>,
+    cubin_file: &String,
+    asm_file: &Option<String>,
+) -> io::Result<()> {
+    let bin = cubin::Cubin::new(cubin_file)?;
+    let arch = bin.arch;
+    let kernels = bin.list_kernels();
+    let first_kernel = kernels.keys().nth(0).unwrap().clone();
+    let kernel_name = kernel_name.clone().unwrap_or(first_kernel);
+    let kernel: &sval::KernelSection = kernels
+        .get(&kernel_name)
+        .expect(&format!("bad kernel: {}", kernel_name))
+        .into();
+    let fp = do_cuobjdump(arch, cubin_file, &Some(kernel_name.clone()));
+    let mut out = match *asm_file {
+        Some(ref x) => {
+            let path = Path::new(x);
+            Box::new(File::create(&path).unwrap()) as Box<Write>
+        }
+        None => Box::new(io::stdout()) as Box<Write>,
+    };
+    out.write_fmt(format_args!(
+        "# Kernel: {}\n# Arch: sm_{}\n",
+        kernel_name,
+        arch
+    ))?;
+    out.write_fmt(
+        format_args!("# InsCnt: {}", kernel.instr_cnt),
+    )?;
+    out.write_fmt(format_args!("# RegCnt: {}", kernel.reg_cnt))?;
+    out.write_fmt(
+        format_args!("# SharedSize: {}", kernel.shared_size),
+    )?;
+    out.write_fmt(format_args!("# BarCnt: {}", kernel.bar_cnt))?;
     Ok(())
 }
-fn sass_pre(debug: bool, asm_file: String, new_asm_file: Option<String>) -> io::Result<()> {
+fn sass_pre(debug: bool, asm_file: &String, new_asm_file: &Option<String>) -> io::Result<()> {
     Ok(())
 }
-fn sass_insert(noreuse: bool, asm_file: String, new_asm_file: Option<String>) -> io::Result<()> {
+fn sass_insert(noreuse: bool, asm_file: &String, new_asm_file: &Option<String>) -> io::Result<()> {
     Ok(())
 }
-
-
-
-
 
 fn main() {
     let args = parse_args();
     match args {
         CmdArgs::List(ref file) => sass_list(file),
         CmdArgs::Test(reg, all, ref file) => sass_test(reg, all, file),
-        CmdArgs::Extract(kernel, file) => sass_extract(kernel, file),
-        CmdArgs::Pre(debug, asm_file, new_asm_file) => sass_pre(debug, asm_file, new_asm_file),
-        CmdArgs::Insert(noreuse, asm_file, new_asm_file) => {
+        CmdArgs::Extract(ref kernel, ref file) => sass_extract(kernel, file, &None),
+        CmdArgs::Pre(debug, ref asm_file, ref new_asm_file) => {
+            sass_pre(debug, asm_file, new_asm_file)
+        }
+        CmdArgs::Insert(noreuse, ref asm_file, ref new_asm_file) => {
             sass_insert(noreuse, asm_file, new_asm_file)
         }
         CmdArgs::Error(err) => {

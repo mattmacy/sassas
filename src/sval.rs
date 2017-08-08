@@ -8,6 +8,7 @@ pub struct KernelSection {
     pub constant_sec: SecHdr,
     pub shared_sec: Option<SecHdr>,
     pub linkage: SymBind,
+    pub instr_cnt: u32,
     pub bar_cnt: u32,
     pub reg_cnt: u32,
     pub shared_size: u32,
@@ -15,7 +16,6 @@ pub struct KernelSection {
     pub size: u64,
     pub map: HashMap<&'static str, SVal>,
 }
-
 
 #[derive(Clone, Debug)]
 pub enum ElfSymbol {
@@ -45,7 +45,6 @@ impl ElfSymbol {
         }
     }
 }
-
 
 #[derive(Clone, Debug)]
 pub enum SecHdr {
@@ -114,6 +113,14 @@ macro_rules! impl_from {
             fn from(input : SVal) -> Self {
                 match input {
                     self::SVal:: $name (x) => x.clone(),
+                    _ => unimplemented!(),
+                }
+            }
+        }
+        impl<'a> From<&'a SVal> for &'a $type {
+            fn from(input : &'a SVal) -> Self {
+                match *input {
+                    self::SVal:: $name (ref x) => x,
                     _ => unimplemented!(),
                 }
             }

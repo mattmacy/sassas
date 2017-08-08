@@ -290,8 +290,8 @@ impl Cubin {
         }
         Ok(cubin)
     }
-    pub fn list_kernels(&self) -> MutStrMap<SVal> {
-        self.table["Kernels"].clone()
+    pub fn list_kernels(&self) -> &MutStrMap<SVal> {
+        &self.table["Kernels"]
     }
     pub fn list_symbols(&self) -> MutStrMap<SVal> {
         self.table["Symbols"].clone()
