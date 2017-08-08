@@ -28,7 +28,7 @@ enum CmdArgs {
     Test(bool, bool, String),
     Extract(Option<String>, String),
     Pre(bool, String, Option<String>),
-    Insert(bool, String, Option<String>),
+    Insert(bool, String, String, Option<String>),
     Error(&'static str),
 }
 
@@ -75,8 +75,9 @@ fn parse_args() -> CmdArgs {
 					Optionally you can skip register reuse flag auto insertion.  This allows you to observe \
 					performance without any reuse or you can use it to set the flags manually in your sass.")
 			.arg(Arg::with_name("noreuse").long("noreuse").short("n").required(false).takes_value(true))
-			.arg(Arg::with_name("cubin_file").index(1))
-			.arg(Arg::with_name("new_cubin_file").required(false).index(2)))
+            .arg(Arg::with_name("asm_file").index(1))
+            .arg(Arg::with_name("cubin_file").index(2))
+			.arg(Arg::with_name("new_cubin_file").required(false).index(3)))
 			.get_matches();
 
     match matches.subcommand() {
@@ -128,13 +129,14 @@ fn parse_args() -> CmdArgs {
                 Some(file) => Some(file.into()),
                 None => None,
             };
-            let new_asm_file = match sub_m.value_of("new_asm_file") {
+            let cubin_file = sub_m.value_of("cubin_file").unwrap().into();
+            let new_cubin_file = match sub_m.value_of("new_cubin_file") {
                 Some(file) => Some(file.into()),
                 None => None,
             };
             match asm_file {
                 None => CmdArgs::Error("asm file reqired"),
-                Some(file) => CmdArgs::Insert(noreuse, file, new_asm_file),
+                Some(file) => CmdArgs::Insert(noreuse, file, cubin_file, new_cubin_file),
             }
         }
         _ => {
@@ -290,20 +292,43 @@ fn sass_extract(
     Ok(())
 }
 
-fn sass_insert(noreuse: bool, asm_file: &String, new_asm_file: &Option<String>) -> io::Result<()> {
-    let out = match *new_asm_file {
+fn sass_insert(
+    noreuse: bool,
+    sass_file: &String,
+    cubin_file: &String,
+    new_cubin_file: &Option<String>,
+) -> io::Result<()> {
+    let out = match *new_cubin_file {
         Some(ref x) => {
             let path = Path::new(x);
             Box::new(File::create(&path).unwrap()) as Box<Write>
         }
         None => Box::new(io::stdout()) as Box<Write>,
     };
-    let fh = File::open(asm_file)?;
+    let fh = File::open(sass_file)?;
     let mut fp = Box::new(BufReader::<File>::new(fh));
     let buf =
         String::from_utf8(fp.fill_buf()?.to_vec()).expect("failed to convert input file to string");
     let re = Regex::new(r"^# Kernel: (\w+)").unwrap();
-    let kernel_name = &re.captures_iter(&buf).nth(0).unwrap()[0];
+    let kernel_match = &re.captures_iter(&buf).nth(0);
+    let kernel_name = match *kernel_match {
+        None => {
+            println!("No kernel found");
+            ::std::process::exit(1)
+        }
+        Some(ref name) => &name[1],
+    };
+    let new_cubin_file = new_cubin_file.clone().unwrap_or(cubin_file.clone());
+    let include = Vec::new();
+    let mut kernel = maxas::assemble(sass_file, include, !noreuse)?;
+    let mut cubin = Cubin::new(cubin_file)?;
+    kernel.map.insert(
+        "Kernel",
+        cubin.get_kernel(&kernel_name.into())?.into(),
+    );
+    cubin.modify_kernel(&kernel)?;
+    cubin.write(&new_cubin_file)?;
+
     println!("kernel_name: {}", kernel_name);
     Ok(())
 }
@@ -321,8 +346,8 @@ fn main() {
         CmdArgs::Pre(debug, ref asm_file, ref new_asm_file) => {
             sass_pre(debug, asm_file, new_asm_file)
         }
-        CmdArgs::Insert(noreuse, ref asm_file, ref new_asm_file) => {
-            sass_insert(noreuse, asm_file, new_asm_file)
+        CmdArgs::Insert(noreuse, ref asm_file, ref cubin_file, ref new_cubin_file) => {
+            sass_insert(noreuse, asm_file, cubin_file, new_cubin_file)
         }
         CmdArgs::Error(err) => {
             println!("Error: {}", err);

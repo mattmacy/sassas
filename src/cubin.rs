@@ -290,12 +290,6 @@ impl Cubin {
         }
         Ok(cubin)
     }
-    pub fn list_kernels(&self) -> &MutStrMap<SVal> {
-        &self.table["Kernels"]
-    }
-    pub fn list_symbols(&self) -> MutStrMap<SVal> {
-        self.table["Symbols"].clone()
-    }
     fn extract_param_sec(data: Vec<u32>) -> MutStrMap<SVal> {
         let mut param_sec = MutStrMap::new();
         param_sec.insert("ParamData", SVal::DataL(data.clone()));
@@ -360,5 +354,21 @@ impl Cubin {
             };
         }
         param_sec
+    }
+    pub fn list_kernels(&self) -> &MutStrMap<SVal> {
+        &self.table["Kernels"]
+    }
+    pub fn list_symbols(&self) -> MutStrMap<SVal> {
+        self.table["Symbols"].clone()
+    }
+    pub fn get_kernel(&self, kernel_name: &String) -> io::Result<KernelSection> {
+        let mut kernel_sec = KernelSection::default();
+        Ok(kernel_sec)
+    }
+    pub fn modify_kernel(&mut self, kernel: &KernelSection) -> io::Result<()> {
+        Ok(())
+    }
+    pub fn write(&self, file: &String) -> io::Result<()> {
+        Ok(())
     }
 }
