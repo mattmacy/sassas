@@ -4,6 +4,7 @@ use std::collections::VecDeque;
 use sval::*;
 
 pub fn test(fp: Box<BufRead>, reg: bool, all: bool) -> io::Result<()> {
+	unimplemented!();
     Ok(())
 }
 
@@ -12,10 +13,12 @@ pub fn extract(
     out: Box<Write>,
     params: Option<&VecDeque<String>>,
 ) -> io::Result<()> {
+	unimplemented!();
     Ok(())
 }
 
 pub fn assemble(file: &String, include: Vec<String>, reuse: bool) -> io::Result<KernelSection> {
     let mut kernel_sec = KernelSection::default();
+	unimplemented!();
     Ok(kernel_sec)
 }
