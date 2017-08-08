@@ -221,7 +221,7 @@ fn sass_extract(
         .get(&kernel_name)
         .expect(&format!("bad kernel: {}", kernel_name))
         .into();
-    let fp = do_cuobjdump(arch, cubin_file, &Some(kernel_name.clone()));
+    let fp = do_cuobjdump(arch, cubin_file, &Some(kernel_name.clone()))?;
     let mut out = match *asm_file {
         Some(ref x) => {
             let path = Path::new(x);
@@ -242,8 +242,19 @@ fn sass_extract(
         format_args!("# SharedSize: {}", kernel.shared_size),
     )?;
     out.write_fmt(format_args!("# BarCnt: {}", kernel.bar_cnt))?;
-    let params: &VecDeque<String> = (&kernel.map["Params"]).into();
-
+    let params = if kernel.map.contains_key("Params") {
+        let params: &VecDeque<String> = (&kernel.map["Params"]).into();
+        let paramstr = params
+            .iter()
+            .map(|s| format!("#\t{}\n", s))
+            .collect::<String>();
+        out.write_all(paramstr.as_bytes())?;
+        Some(params)
+    } else {
+        None
+    };
+    out.write_all(b"#\n# Instructions:\n\n")?;
+    maxas::extract(fp, out, params)?;
     Ok(())
 }
 fn sass_pre(debug: bool, asm_file: &String, new_asm_file: &Option<String>) -> io::Result<()> {
