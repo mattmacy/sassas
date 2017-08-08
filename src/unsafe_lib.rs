@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::cell::RefCell;
 use std::hash::Hash;
-use std::collections::hash_map::Iter;
+use std::collections::hash_map;
 use std::ops::{Index, IndexMut};
 use std::fmt::Debug;
 
@@ -9,13 +9,21 @@ use std::fmt::Debug;
 pub struct MutMap<K: Eq + Hash, V: Default> {
     map: HashMap<K, RefCell<V>>,
 }
-pub struct MutMapIter<'a, K: 'a, V: 'a + Default> {
-    iter: Iter<'a, K, RefCell<V>>,
+pub struct Iter<'a, K: 'a, V: 'a + Default> {
+    inner: hash_map::Iter<'a, K, RefCell<V>>,
 }
-impl<'a, K, V: Default + Clone> Iterator for MutMapIter<'a, K, V> {
+pub struct Keys<'a, K: 'a, V: 'a + Default> {
+    inner: Iter<'a, K, V>,
+}
+pub struct Values<'a, K: 'a, V: 'a + Default> {
+    inner: Iter<'a, K, V>,
+}
+
+
+impl<'a, K, V: Default + Clone> Iterator for Iter<'a, K, V> {
     type Item = (&'a K, V);
     fn next(&mut self) -> Option<Self::Item> {
-        match self.iter.next() {
+        match self.inner.next() {
             None => None,
             Some((k, rv)) => {
                 let v = rv.borrow().clone();
@@ -23,7 +31,39 @@ impl<'a, K, V: Default + Clone> Iterator for MutMapIter<'a, K, V> {
             }
         }
     }
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
 }
+
+impl<'a, K, V: Default + Clone> Iterator for Keys<'a, K, V> {
+    type Item = &'a K;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|(k, _)| k)
+    }
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+}
+
+impl<'a, K, V: Default + Clone> Iterator for Values<'a, K, V> {
+    type Item = V;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|(_, v)| v)
+    }
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+}
+
+
 impl<K: Eq + Hash, V: Default> Default for MutMap<K, V> {
     fn default() -> Self {
         Self::new()
@@ -34,8 +74,8 @@ impl<K: Eq + Hash, V: Default> MutMap<K, V> {
     pub fn new() -> Self {
         MutMap { map: HashMap::new() }
     }
-    pub fn iter(&self) -> MutMapIter<K, V> {
-        MutMapIter { iter: self.map.iter() }
+    pub fn iter(&self) -> Iter<K, V> {
+        Iter { inner: self.map.iter() }
     }
     pub fn len(&self) -> usize {
         self.map.len()
@@ -86,8 +126,14 @@ impl<V: Default> MutStrMap<V> {
     pub fn new() -> Self {
         MutStrMap { map: MutMap::new() }
     }
-    pub fn iter(&self) -> MutMapIter<String, V> {
+    pub fn iter(&self) -> Iter<String, V> {
         self.map.iter()
+    }
+    pub fn keys(&self) -> Keys<String, V> {
+        Keys { inner: self.iter() }
+    }
+    pub fn values(&self) -> Values<String, V> {
+        Values { inner: self.iter() }
     }
     pub fn len(&self) -> usize {
         self.map.len()
