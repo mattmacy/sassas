@@ -260,8 +260,9 @@ fn sass_extract_cubin(
     maxas::extract(fp, out, params)?;
     Ok(())
 }
+
 fn sass_extract_sass(sass_file: &String, asm_file: &Option<String>) -> io::Result<()> {
-    let mut out = match *asm_file {
+    let out = match *asm_file {
         Some(ref x) => {
             let path = Path::new(x);
             Box::new(File::create(&path).unwrap()) as Box<Write>
@@ -287,13 +288,24 @@ fn sass_extract(
     Ok(())
 }
 
+fn sass_insert(noreuse: bool, asm_file: &String, new_asm_file: &Option<String>) -> io::Result<()> {
+    let out = match *new_asm_file {
+        Some(ref x) => {
+            let path = Path::new(x);
+            Box::new(File::create(&path).unwrap()) as Box<Write>
+        }
+        None => Box::new(io::stdout()) as Box<Write>,
+    };
+    let fh = File::open(asm_file)?;
+    let mut fp = Box::new(BufReader::<File>::new(fh));
+    let buf =
+        String::from_utf8(fp.fill_buf()?.to_vec()).expect("failed to convert input file to string");
 
 
-fn sass_pre(debug: bool, asm_file: &String, new_asm_file: &Option<String>) -> io::Result<()> {
     Ok(())
 }
 
-fn sass_insert(noreuse: bool, asm_file: &String, new_asm_file: &Option<String>) -> io::Result<()> {
+fn sass_pre(debug: bool, asm_file: &String, new_asm_file: &Option<String>) -> io::Result<()> {
     Ok(())
 }
 
