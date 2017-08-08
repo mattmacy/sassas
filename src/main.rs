@@ -333,7 +333,25 @@ fn sass_insert(
     Ok(())
 }
 
-fn sass_pre(debug: bool, asm_file: &String, new_asm_file: &Option<String>) -> io::Result<()> {
+fn sass_pre(debug: bool, sass_file: &String, new_asm_file: &Option<String>) -> io::Result<()> {
+    /* XXX process -D(\w+) */
+
+    let mut out = match *new_asm_file {
+        Some(ref x) => {
+            if x == sass_file {
+                println!("source and destination should not be the same");
+                ::std::process::exit(1)
+            }
+            let path = Path::new(x);
+            Box::new(File::create(&path).unwrap()) as Box<Write>
+        }
+        None => Box::new(io::stdout()) as Box<Write>,
+    };
+    let fh = File::open(sass_file)?;
+    let fp = Box::new(BufReader::<File>::new(fh));
+    let include = Vec::new();
+    let result = maxas::preprocess(fp, include, debug)?;
+    out.write_all(result.as_bytes())?;
     Ok(())
 }
 
