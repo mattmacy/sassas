@@ -49,16 +49,20 @@ fn include_file(include: &Vec<String>, file: &str) -> String {
     }
 }
 
-fn strip_regex(expr: &str, line: &str) -> String {
+fn regex_strip(expr: &str, line: &str) -> String {
     (*Regex::new(expr).unwrap().replace_all(line, "")).into()
+}
+
+fn regex_match(expr: &str, line: &str) -> bool {
+    Regex::new(expr).unwrap().is_match(line)
 }
 
 fn set_constmap<'a>(constmap: &mut HashMap<String, String>, consttext: &'a str) -> &'a str {
     for line in consttext.split('\n') {
         // strip comments
-        let line = strip_regex(r"(?:#|//).*", &line);
+        let line = regex_strip(r"(?:#|//).*", &line);
         // skip blank lines
-        if !Regex::new(r"\S").unwrap().is_match(&line) {
+        if !regex_match(r"\S", &line) {
             continue;
         }
 
@@ -81,6 +85,28 @@ fn set_register_map<'a>(
     regtext: &'a str,
     remove_regmap: bool,
 ) -> &'a str {
+
+    for line in regtext.split("\n") {
+        let line = line.trim();
+        // strip comments
+        let line = regex_strip(r"?:#|//).*", &line);
+        // skip blank lines
+        if !regex_match(r"\S", &line) {
+            continue;
+        }
+        let auto = regex_match(r"~", &line);
+        let share = regex_match(r"=", &line);
+        let kv = line.split(r"[:~=]").collect::<Vec<&str>>();
+        let (reg_nums, reg_names) = (kv[0], kv[1]);
+        //let mut num_list = Vec::new();
+        for num in reg_nums.split(r"\s*,\s*") {
+            let bounds = num.split(r"\s*\-\s*").collect::<Vec<&str>>();
+            let (start, stop) = (bounds[0], bounds[1]);
+
+        }
+    }
+
+    /* XXX */
     if remove_regmap { "" } else { regtext }
 }
 
@@ -90,6 +116,7 @@ fn schedule_blocks(
     regmap: &HashMap<String, Vec<String>>,
     debug: bool,
 ) -> String {
+    /* XXX */
     "".into()
 }
 
@@ -119,7 +146,7 @@ pub fn preprocess(
             format!("{}\n", include_file(include, &caps[1]))
         },
     );
-    let file = strip_regex(comment_re, &file);
+    let file = regex_strip(comment_re, &file);
     // XXX implement Inline and Code
 
     let file = Regex::new(constmap_re).unwrap().replace_all(
@@ -163,6 +190,5 @@ pub fn preprocess(
         },
     );
 
-    // XXX TODO
     Ok((*file).into())
 }
