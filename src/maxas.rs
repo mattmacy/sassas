@@ -25,7 +25,7 @@ pub fn assemble(file: &String, include: Vec<String>, reuse: bool) -> io::Result<
     Ok(kernel_sec)
 }
 
-fn include_file(include: &Vec<String>, file: &str) -> io::Result<String> {
+fn include_file_(include: &Vec<String>, file: &str) -> io::Result<String> {
     let includestr = include
         .iter()
         .map(|s| format!("{}/", s))
@@ -38,8 +38,8 @@ fn include_file(include: &Vec<String>, file: &str) -> io::Result<String> {
     ))
 }
 
-fn include_file_wrap(include: &Vec<String>, file: &str) -> String {
-    let result = include_file(include, file);
+fn include_file(include: &Vec<String>, file: &str) -> String {
+    let result = include_file_(include, file);
     match result {
         Ok(r) => r,
         Err(e) => {
@@ -49,7 +49,7 @@ fn include_file_wrap(include: &Vec<String>, file: &str) -> String {
     }
 }
 
-fn strip_regex<'a>(expr: &str, line: &str) -> String {
+fn strip_regex(expr: &str, line: &str) -> String {
     (*Regex::new(expr).unwrap().replace_all(line, "")).into()
 }
 
@@ -68,6 +68,22 @@ fn set_constmap<'a>(constmap: &mut HashMap<String, String>, consttext: &'a str) 
     }
     ""
 }
+fn constmap_lookup(constmap: &HashMap<String, String>, key: &str) -> String {
+    if constmap.contains_key(key) {
+        constmap[key].clone()
+    } else {
+        key.into()
+    }
+}
+
+fn set_register_map<'a>(
+    regmap: &mut HashMap<String, Vec<String>>,
+    regtext: &'a str,
+    remove_regmap: bool,
+) -> &'a str {
+    if remove_regmap { "" } else { regtext }
+}
+
 
 pub fn preprocess(
     mut fp: Box<BufRead>,
@@ -79,30 +95,58 @@ pub fn preprocess(
     let comment_re = r#"^[\t ]*<COMMENT>.*?^\s*</COMMENT>\n?"#;
     let include_re = r#"^[\t ]*<INCLUDE\s+file="([^"]+)"\s*/?>\n?"#;
     let code_re = r"^[\t ]*<CODE(\d*)>(.*?)^\s*<\/CODE\1>\n?";
-    let const_map_re = r"^[\t ]*<CONSTANT_MAPPING>(.*?)^\s*</CONSTANT_MAPPING>\n?";
+    let constmap_re = r"^[\t ]*<CONSTANT_MAPPING>(.*?)^\s*</CONSTANT_MAPPING>\n?";
     let regmap_re = r"^[\t ]*<REGISTER_MAPPING>(.*?)^\s*</REGISTER_MAPPING>\n?";
     let schedule_re = r"^[\t ]*<SCHEDULE_BLOCK>(.*?)^\s*</SCHEDULE_BLOCK>\n?";
     let inline_re = r"\[(\+|\-)(.+?)\1\]";
-    let mut regmap = match regmap {
-        Some(r) => r,
-        None => HashMap::new(),
+    let (mut regmap, remove_regmap) = match regmap {
+        Some(r) => (r, true),
+        None => (HashMap::new(), false),
     };
     let mut constmap = HashMap::new();
 
     let file = Regex::new(include_re).unwrap().replace_all(
         &file,
         |caps: &Captures| {
-            format!("{}\n", include_file_wrap(include, &caps[1]))
+            format!("{}\n", include_file(include, &caps[1]))
         },
     );
     let file = strip_regex(comment_re, &file);
-    // XXX Inline and Code
-    let file = Regex::new(const_map_re).unwrap().replace_all(
+    // XXX implement Inline and Code
+
+    let file = Regex::new(constmap_re).unwrap().replace_all(
         &file,
         |caps: &Captures| {
             format!("{}\n", set_constmap(&mut constmap, &caps[1]))
         },
     );
+
+    let lines = file.split("\n");
+    let mut linesnew = Vec::new();
+
+    // replace constants with values
+    let re = Regex::new(r"(\w+(?:\[\d+\])?)").unwrap();
+    for line in lines {
+        let line = re.replace_all(&file, |caps: &Captures| {
+            format!("{}", constmap_lookup(&constmap, &caps[1]))
+        });
+        linesnew.push(line);
+    }
+    let file = linesnew
+        .iter()
+        .map(|l| format!("{}\n", l))
+        .collect::<String>();
+
+    let file = Regex::new(regmap_re).unwrap().replace_all(
+        &file,
+        |caps: &Captures| {
+            format!(
+                "{}\n",
+                set_register_map(&mut regmap, &caps[1], remove_regmap)
+            )
+        },
+    );
+
 
 
     // XXX TODO
