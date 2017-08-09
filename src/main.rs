@@ -5,6 +5,7 @@ extern crate memmap;
 extern crate itertools;
 extern crate num;
 extern crate regex;
+extern crate dyon;
 
 use regex::Regex;
 use std::process::{Command, Stdio};
