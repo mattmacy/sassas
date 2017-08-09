@@ -49,6 +49,26 @@ fn include_file_wrap(include: &Vec<String>, file: &str) -> String {
     }
 }
 
+fn strip_regex<'a>(expr: &str, line: &str) -> String {
+    (*Regex::new(expr).unwrap().replace_all(line, "")).into()
+}
+
+fn set_constmap<'a>(constmap: &mut HashMap<String, String>, consttext: &'a str) -> &'a str {
+    for line in consttext.split('\n') {
+        // strip comments
+        let line = strip_regex(r"(?:#|//).*", &line);
+        // skip blank lines
+        if !Regex::new(r"\S").unwrap().is_match(&line) {
+            continue;
+        }
+
+        let kv = line.split(":").map(|s| s.trim()).collect::<Vec<&str>>();
+
+        constmap.insert(kv[0].into(), kv[1].into());
+    }
+    ""
+}
+
 pub fn preprocess(
     mut fp: Box<BufRead>,
     include: &Vec<String>,
@@ -67,10 +87,23 @@ pub fn preprocess(
         Some(r) => r,
         None => HashMap::new(),
     };
-    let re = Regex::new(inline_re).unwrap();
-    let file = re.replace_all(&file, |caps: &Captures| {
-        format!("{}\n", include_file_wrap(include, &caps[1]))
-    });
+    let mut constmap = HashMap::new();
+
+    let file = Regex::new(include_re).unwrap().replace_all(
+        &file,
+        |caps: &Captures| {
+            format!("{}\n", include_file_wrap(include, &caps[1]))
+        },
+    );
+    let file = strip_regex(comment_re, &file);
+    // XXX Inline and Code
+    let file = Regex::new(const_map_re).unwrap().replace_all(
+        &file,
+        |caps: &Captures| {
+            format!("{}\n", set_constmap(&mut constmap, &caps[1]))
+        },
+    );
+
 
     // XXX TODO
     Ok((*file).into())
