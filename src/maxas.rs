@@ -84,6 +84,14 @@ fn set_register_map<'a>(
     if remove_regmap { "" } else { regtext }
 }
 
+fn schedule_blocks(
+    block: &str,
+    count: usize,
+    regmap: &HashMap<String, Vec<String>>,
+    debug: bool,
+) -> String {
+    "".into()
+}
 
 pub fn preprocess(
     mut fp: Box<BufRead>,
@@ -146,8 +154,14 @@ pub fn preprocess(
             )
         },
     );
-
-
+    let mut count = 0;
+    let file = Regex::new(schedule_re).unwrap().replace_all(
+        &file,
+        |caps: &Captures| {
+            count += 1;
+            format!("{}\n", schedule_blocks(&caps[1], count, &regmap, debug))
+        },
+    );
 
     // XXX TODO
     Ok((*file).into())
