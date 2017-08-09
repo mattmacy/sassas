@@ -350,7 +350,7 @@ fn sass_pre(debug: bool, sass_file: &String, new_asm_file: &Option<String>) -> i
     let fh = File::open(sass_file)?;
     let fp = Box::new(BufReader::<File>::new(fh));
     let include = Vec::new();
-    let result = maxas::preprocess(fp, include, debug)?;
+    let result = maxas::preprocess(fp, &include, debug, None)?;
     out.write_all(result.as_bytes())?;
     Ok(())
 }
