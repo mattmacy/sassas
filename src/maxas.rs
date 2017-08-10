@@ -1,6 +1,7 @@
 use std::io::{Read, Write, BufRead, BufReader};
-use std::{io, path, fs};
+use std::{io, path, fs, ops};
 use std::collections::{HashMap, VecDeque};
+use unsafe_lib::MutStrMap;
 
 use regex::{Regex, Captures};
 use sval::*;
@@ -87,20 +88,37 @@ fn constmap_lookup(constmap: &HashMap<String, String>, key: &str) -> String {
     }
 }
 
-enum Bounds {
-    Range(usize, usize),
-    Single(usize),
+fn get_range(bounds: &Vec<&str>) -> Result<ops::Range<usize>, ::std::num::ParseIntError> {
+    let range = if bounds.len() == 1 {
+        let start: usize = bounds[0].parse()?;
+        start..start + 1
+    } else {
+        let (start, stop): (usize, usize) = (bounds[0].parse()?, bounds[1].parse()?);
+        start..stop + 1
+    };
+    Ok(range)
 }
 
 fn set_register_map_<'a>(
-    regmap: &mut HashMap<String, Vec<String>>,
+    regmap: &mut MutStrMap<SVal>,
     regtext: &'a str,
     remove_regmap: bool,
 ) -> Result<&'a str, ::std::num::ParseIntError> {
     let reg1_re = r"^(\w+)<((?:\d+(?:\s*\-\s*\d+)?\s*\|?\s*)+)>(\w*)(?:\[([0-3])\])?$";
     let reg2_re = r"^(\w+)(?:\[([0-3])\])?$";
     /* XXX  -- look up in regMap */
-    let mut regbank: HashMap<String, String> = HashMap::new();
+    let mut vectors: MutStrMap<SVal> = match regmap.get("__vectors") {
+        Some(v) => v.clone().into(),
+        None => MutStrMap::new(),
+    };
+    let mut regbank: MutStrMap<String> = match regmap.get("__regbank") {
+        Some(v) => v.clone().into(),
+        None => MutStrMap::new(),
+    };
+    /* XXX  -- look up in regMap */
+
+    let mut vectors = HashMap::<String, Vec<String>>::new();
+    let mut aliases: HashMap<String, String> = HashMap::new();
 
     for line in regtext.split("\n") {
         let line = line.trim();
@@ -115,34 +133,51 @@ fn set_register_map_<'a>(
         let kv = line.split(|c| c == ':' || c == '~' || c == '=')
             .collect::<Vec<&str>>();
         let (reg_nums, reg_names) = (kv[0], kv[1]);
-        let mut num_list = Vec::new();
+        let mut num_list = Vec::<usize>::new();
         for num in reg_nums.split(r",") {
             let bounds = num.split(r"-").map(|s| s.trim()).collect::<Vec<&str>>();
-            if bounds.len() == 2 {
-                let (start, end): (usize, usize) = (bounds[0].parse()?, bounds[1].parse()?);
-                num_list.push(Bounds::Range(start, end));
-            } else {
-                num_list.push(Bounds::Single(bounds[0].parse()?));
-            }
+            let range = get_range(&bounds)?;
+            let mut range_list = range.collect::<Vec<usize>>();
+            num_list.append(&mut range_list);
         }
         let mut name_list = Vec::<String>::new();
         for name in reg_names.split(",") {
             let name = name.trim();
             if regex_match(reg1_re, name) {
                 let caps = &regex_matches(reg1_re, name).unwrap()[0];
-                let (name1, name2, bank) = (&caps[1], &caps[3], &caps[4]);
+                let (name1, name2) = (&caps[1], &caps[3]);
+                let bank = if caps.len() > 4 { Some(&caps[4]) } else { None };
                 for s in (&caps[2]).split("|") {
                     let bounds = s.split("-").collect::<Vec<&str>>();
-                    let (start, stop): (usize, usize) = (bounds[0].parse()?, bounds[1].parse()?);
+                    let range = get_range(&bounds)?;
+                    for r in range.map(|v| format!("{}{}{}", name1, v, name2)) {
+                        if !aliases.contains_key(&r) {
+                            aliases.insert(r.clone(), format!("{}{}", name1, name2));
+                            name_list.push(r.clone());
+                            if bank.is_some() {
+                                if auto {
+                                    regbank.insert(r, bank.unwrap().into());
+                                } else {
+                                    println!(
+                                        "Cannot request a bank for a fixed register range: {}",
+                                        name
+                                    );
+                                }
+                            }
+                        }
+                    }
                 }
             } else if regex_match(reg2_re, name) {
                 let caps = &regex_matches(reg2_re, name).unwrap()[0];
                 name_list.push(caps[1].into());
-                if auto && caps.len() > 2 {
-                    regbank.insert(caps[1].into(), caps[2].into());
-                }
-                if !auto && caps.len() > 2 {
-                    println!("Cannot request a bank for a fixed register range: {}", name);
+                if caps.len() > 2 {
+                    if auto {
+                        // help out the type checker :-/
+                        let (a, b): (String, String) = (caps[1].into(), caps[2].into());
+                        regbank.insert(a, b);
+                    } else {
+                        println!("Cannot request a bank for a fixed register range: {}", name);
+                    }
                 }
             } else {
                 panic!("Bad register name: '{}' at: {}", name, line);
@@ -151,13 +186,55 @@ fn set_register_map_<'a>(
         if (!share && num_list.len() < name_list.len()) || (share && num_list.len() > 1) {
             panic!("Mismatched register mapping at: {}", &line);
         }
+        let mut i = 0;
+        while i < num_list.len() - 1 {
+            if num_list[i] != num_list[i + 1] {
+                break;
+            }
+            i += 1;
+        }
+        let ascending = i + 1 == num_list.len();
+        for n in 0..name_list.len() {
+            let n_name: &String = (&name_list[n]).into();
+            if regmap.contains_key(n_name) {
+                panic!("register defined twice: {}", n_name)
+            }
+            if auto {
+                regmap.insert(n_name.clone(), num_list.clone().into());
+            } else if share {
+                regmap.insert(n_name.clone(), format!("R{}", num_list[0]).into());
+            } else {
+                regmap.insert(n_name.clone(), format!("R{}", num_list[0]).into());
+                if ascending && num_list[n] & 1 != 0 {
+                    continue;
+                }
+                let end = if num_list[n] & 2 != 0 || n + 3 > name_list.len() {
+                    n + 1
+                } else {
+                    n + 3
+                };
+                if end > name_list.len() {
+                    continue;
+                }
+                vectors.insert(name_list[n].clone().into(), name_list[n..end].to_vec());
+                if !aliases.contains_key(&name_list[n]) ||
+                    regmap.contains_key(&aliases[&name_list[n]])
+                {
+                    continue;
+                }
+                let alias_name = aliases[&name_list[n]].clone();
+                unborrow!(regmap.insert(alias_name.clone(), regmap[n_name].clone()));
+                unborrow!(vectors.insert(alias_name, vectors[n_name].clone()));
+                aliases.remove(n_name);
+            }
+        }
     }
 
     /* XXX */
     if remove_regmap { Ok("") } else { Ok(regtext) }
 }
 fn set_register_map<'a>(
-    regmap: &mut HashMap<String, Vec<String>>,
+    regmap: &mut MutStrMap<SVal>,
     regtext: &'a str,
     remove_regmap: bool,
 ) -> &'a str {
@@ -169,13 +246,8 @@ fn set_register_map<'a>(
         }
     }
 }
-fn schedule_blocks(
-    block: &str,
-    count: usize,
-    regmap: &HashMap<String, Vec<String>>,
-    debug: bool,
-) -> String {
-    /* XXX */
+fn scheduler(block: &str, count: usize, regmap: &MutStrMap<SVal>, debug: bool) -> String {
+    /* XXX replaceXMADs*/
     "".into()
 }
 
@@ -183,7 +255,7 @@ pub fn preprocess(
     mut fp: Box<BufRead>,
     include: &Vec<String>,
     debug: bool,
-    regmap: Option<HashMap<String, Vec<String>>>,
+    regmap: Option<MutStrMap<SVal>>,
 ) -> io::Result<String> {
     let file = String::from_utf8(fp.fill_buf()?.to_vec()).expect("failed to convert input file");
     let comment_re = r#"^[\t ]*<COMMENT>.*?^\s*</COMMENT>\n?"#;
@@ -195,7 +267,7 @@ pub fn preprocess(
     let inline_re = r"\[(\+|\-)(.+?)\1\]";
     let (mut regmap, remove_regmap) = match regmap {
         Some(r) => (r, true),
-        None => (HashMap::new(), false),
+        None => (MutStrMap::new(), false),
     };
     let mut constmap = HashMap::new();
 
@@ -245,7 +317,7 @@ pub fn preprocess(
         &file,
         |caps: &Captures| {
             count += 1;
-            format!("{}\n", schedule_blocks(&caps[1], count, &regmap, debug))
+            format!("{}\n", scheduler(&caps[1], count, &regmap, debug))
         },
     );
 
