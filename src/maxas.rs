@@ -99,6 +99,8 @@ fn set_register_map_<'a>(
 ) -> Result<&'a str, ::std::num::ParseIntError> {
     let reg1_re = r"^(\w+)<((?:\d+(?:\s*\-\s*\d+)?\s*\|?\s*)+)>(\w*)(?:\[([0-3])\])?$";
     let reg2_re = r"^(\w+)(?:\[([0-3])\])?$";
+    /* XXX  -- look up in regMap */
+    let mut regbank: HashMap<String, String> = HashMap::new();
 
     for line in regtext.split("\n") {
         let line = line.trim();
@@ -123,17 +125,25 @@ fn set_register_map_<'a>(
                 num_list.push(Bounds::Single(bounds[0].parse()?));
             }
         }
-        let name_list = Vec::<String>::new();
+        let mut name_list = Vec::<String>::new();
         for name in reg_names.split(",") {
             let name = name.trim();
             if regex_match(reg1_re, name) {
                 let caps = &regex_matches(reg1_re, name).unwrap()[0];
                 let (name1, name2, bank) = (&caps[1], &caps[3], &caps[4]);
                 for s in (&caps[2]).split("|") {
-
+                    let bounds = s.split("-").collect::<Vec<&str>>();
+                    let (start, stop): (usize, usize) = (bounds[0].parse()?, bounds[1].parse()?);
                 }
             } else if regex_match(reg2_re, name) {
                 let caps = &regex_matches(reg2_re, name).unwrap()[0];
+                name_list.push(caps[1].into());
+                if auto && caps.len() > 2 {
+                    regbank.insert(caps[1].into(), caps[2].into());
+                }
+                if !auto && caps.len() > 2 {
+                    println!("Cannot request a bank for a fixed register range: {}", name);
+                }
             } else {
                 panic!("Bad register name: '{}' at: {}", name, line);
             }
