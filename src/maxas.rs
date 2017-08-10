@@ -152,31 +152,30 @@ fn set_register_map_<'a>(
                     for r in range.map(|v| format!("{}{}{}", name1, v, name2)) {
                         if !aliases.contains_key(&r) {
                             aliases.insert(r.clone(), format!("{}{}", name1, name2));
-                            name_list.push(r.clone());
-                            if bank.is_some() {
-                                if auto {
-                                    regbank.insert(r, bank.unwrap().into());
-                                } else {
-                                    println!(
-                                        "Cannot request a bank for a fixed register range: {}",
-                                        name
-                                    );
-                                }
-                            }
+                        }
+                        name_list.push(r.clone());
+                        if bank.is_none() {
+                            continue;
+                        }
+                        if auto {
+                            regbank.insert(r, bank.unwrap().into());
+                        } else {
+                            println!("Cannot request a bank for a fixed register range: {}", name);
                         }
                     }
                 }
             } else if regex_match(reg2_re, name) {
                 let caps = &regex_matches(reg2_re, name).unwrap()[0];
                 name_list.push(caps[1].into());
-                if caps.len() > 2 {
-                    if auto {
-                        // help out the type checker :-/
-                        let (a, b): (String, String) = (caps[1].into(), caps[2].into());
-                        regbank.insert(a, b);
-                    } else {
-                        println!("Cannot request a bank for a fixed register range: {}", name);
-                    }
+                if caps.len() <= 2 {
+                    continue;
+                }
+                if auto {
+                    // help out the type checker :-/
+                    let (a, b): (String, String) = (caps[1].into(), caps[2].into());
+                    regbank.insert(a, b);
+                } else {
+                    println!("Cannot request a bank for a fixed register range: {}", name);
                 }
             } else {
                 panic!("Bad register name: '{}' at: {}", name, line);
