@@ -106,8 +106,7 @@ fn set_register_map_<'a>(
 ) -> Result<&'a str, ::std::num::ParseIntError> {
     let reg1_re = r"^(\w+)<((?:\d+(?:\s*\-\s*\d+)?\s*\|?\s*)+)>(\w*)(?:\[([0-3])\])?$";
     let reg2_re = r"^(\w+)(?:\[([0-3])\])?$";
-    /* XXX  -- look up in regMap */
-    let mut vectors: MutStrMap<SVal> = match regmap.get("__vectors") {
+    let mut vectors: MutStrMap<Vec<String>> = match regmap.get("__vectors") {
         Some(v) => v.clone().into(),
         None => MutStrMap::new(),
     };
@@ -115,9 +114,6 @@ fn set_register_map_<'a>(
         Some(v) => v.clone().into(),
         None => MutStrMap::new(),
     };
-    /* XXX  -- look up in regMap */
-
-    let mut vectors = HashMap::<String, Vec<String>>::new();
     let mut aliases: HashMap<String, String> = HashMap::new();
 
     for line in regtext.split("\n") {
@@ -158,7 +154,7 @@ fn set_register_map_<'a>(
                             continue;
                         }
                         if auto {
-                            regbank.insert(r, bank.unwrap().into());
+                            regbank.insert(&r, bank.unwrap().into());
                         } else {
                             println!("Cannot request a bank for a fixed register range: {}", name);
                         }
@@ -172,8 +168,8 @@ fn set_register_map_<'a>(
                 }
                 if auto {
                     // help out the type checker :-/
-                    let (a, b): (String, String) = (caps[1].into(), caps[2].into());
-                    regbank.insert(a, b);
+                    let b: String = caps[2].into();
+                    regbank.insert(&caps[1], b);
                 } else {
                     println!("Cannot request a bank for a fixed register range: {}", name);
                 }
@@ -198,11 +194,11 @@ fn set_register_map_<'a>(
                 panic!("register defined twice: {}", n_name)
             }
             if auto {
-                regmap.insert(n_name.clone(), num_list.clone().into());
+                regmap.insert(n_name, num_list.clone().into());
             } else if share {
-                regmap.insert(n_name.clone(), format!("R{}", num_list[0]).into());
+                regmap.insert(n_name, format!("R{}", num_list[0]).into());
             } else {
-                regmap.insert(n_name.clone(), format!("R{}", num_list[0]).into());
+                regmap.insert(n_name, format!("R{}", num_list[0]).into());
                 if ascending && num_list[n] & 1 != 0 {
                     continue;
                 }
@@ -214,15 +210,17 @@ fn set_register_map_<'a>(
                 if end > name_list.len() {
                     continue;
                 }
-                vectors.insert(name_list[n].clone().into(), name_list[n..end].to_vec());
+                vectors.insert(&name_list[n], name_list[n..end].to_vec());
                 if !aliases.contains_key(&name_list[n]) ||
                     regmap.contains_key(&aliases[&name_list[n]])
                 {
                     continue;
                 }
-                let alias_name = aliases[&name_list[n]].clone();
-                unborrow!(regmap.insert(alias_name.clone(), regmap[n_name].clone()));
-                unborrow!(vectors.insert(alias_name, vectors[n_name].clone()));
+                {
+                    let alias_name = &aliases[&name_list[n]];
+                    unborrow!(regmap.insert(alias_name, regmap[n_name].clone()));
+                    unborrow!(vectors.insert(alias_name, vectors[n_name].clone()));
+                }
                 aliases.remove(n_name);
             }
         }
@@ -245,6 +243,10 @@ fn set_register_map<'a>(
     }
 }
 fn scheduler(block: &str, count: usize, regmap: &MutStrMap<SVal>, debug: bool) -> String {
+
+    let vectors: &MutStrMap<SVal> = (&regmap["__vectors"]).into();
+    let mut linenum = 0;
+
     /* XXX replaceXMADs*/
     "".into()
 }

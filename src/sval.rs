@@ -98,6 +98,7 @@ pub enum SVal {
     SymEnt64(Elf64_Sym),
     Map(MutStrMap<SVal>),
     StringMap(MutStrMap<String>),
+    StringVecMap(MutStrMap<Vec<String>>),
     Required,
 }
 impl Default for SVal {
@@ -155,3 +156,4 @@ impl_from!(VecDeque<String>, StrVecDeq);
 impl_from!(SymBind, SymBind);
 impl_from!(MutStrMap<SVal>, Map);
 impl_from!(MutStrMap<String>, StringMap);
+impl_from!(MutStrMap<Vec<String>>, StringVecMap);

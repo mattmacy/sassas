@@ -155,10 +155,7 @@ impl<V: Default> MutStrMap<V> {
         self.map.contains_key(&name.into())
     }
 
-    pub fn insert<S>(&mut self, k: S, v: V) -> Option<V>
-    where
-        S: Into<String>,
-    {
+    pub fn insert(&mut self, k: &str, v: V) -> Option<V> {
         self.map.insert(k.into(), v)
     }
 }
