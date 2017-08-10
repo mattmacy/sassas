@@ -136,8 +136,7 @@ fn set_register_map_<'a>(
         let mut num_list = Vec::<usize>::new();
         for num in reg_nums.split(r",") {
             let bounds = num.split(r"-").map(|s| s.trim()).collect::<Vec<&str>>();
-            let range = get_range(&bounds)?;
-            let mut range_list = range.collect::<Vec<usize>>();
+            let mut range_list = get_range(&bounds)?.collect();
             num_list.append(&mut range_list);
         }
         let mut name_list = Vec::<String>::new();
