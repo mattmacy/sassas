@@ -86,7 +86,9 @@ impl<K: Eq + Hash + Clone + Debug, V: Default> MutMap<K, V> {
         } else {
             None
         }
-
+    }
+    pub fn contains_key(&self, idx: &K) -> bool {
+        self.map.contains_key(idx)
     }
     pub fn insert(&mut self, k: K, v: V) -> Option<V> {
         let result = self.map.insert(k, RefCell::new(v));
@@ -146,9 +148,13 @@ impl<V: Default> MutStrMap<V> {
     pub fn len(&self) -> usize {
         self.map.len()
     }
-    pub fn get(&self, name: &String) -> Option<&V> {
-        self.map.get(name)
+    pub fn get(&self, name: &str) -> Option<&V> {
+        self.map.get(&name.into())
     }
+    pub fn contains_key(&self, name: &str) -> bool {
+        self.map.contains_key(&name.into())
+    }
+
     pub fn insert<S>(&mut self, k: S, v: V) -> Option<V>
     where
         S: Into<String>,
