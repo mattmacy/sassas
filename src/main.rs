@@ -6,6 +6,8 @@ extern crate itertools;
 extern crate num;
 extern crate regex;
 extern crate dyon;
+#[macro_use]
+extern crate unborrow;
 
 use regex::Regex;
 use std::process::{Command, Stdio};
