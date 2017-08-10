@@ -80,6 +80,7 @@ pub enum SVal {
     Float(f32),
     Data(Vec<u8>),
     DataL(Vec<u32>),
+    DataUS(Vec<usize>),
     Elf32Phdrs(Vec<Elf32_Phdr>),
     Elf64Phdrs(Vec<Elf64_Phdr>),
     Elf32Shdrs(Vec<Elf32_Shdr>),
@@ -87,6 +88,7 @@ pub enum SVal {
     Elf32Shdr(Elf32_Shdr),
     Elf64Shdr(Elf64_Shdr),
     KernelSection(KernelSection),
+    Str(String),
     StrVec(Vec<String>),
     StrVecDeq(VecDeque<String>),
     SecHdr(SecHdr),
@@ -95,6 +97,7 @@ pub enum SVal {
     SymEnt32(Elf32_Sym),
     SymEnt64(Elf64_Sym),
     Map(MutStrMap<SVal>),
+    StringMap(MutStrMap<String>),
     Required,
 }
 impl Default for SVal {
@@ -132,6 +135,7 @@ impl_from!(f32, Float);
 impl_from!(i32, Int);
 impl_from!(u32, UInt);
 impl_from!(bool, Bool);
+impl_from!(String, Str);
 impl_from!(Elf32_Sym, SymEnt32);
 impl_from!(Elf64_Sym, SymEnt64);
 impl_from!(Vec<Elf32_Phdr>, Elf32Phdrs);
@@ -145,7 +149,9 @@ impl_from!(KernelSection, KernelSection);
 impl_from!(SecHdr, SecHdr);
 impl_from!(Vec<u8>, Data);
 impl_from!(Vec<u32>, DataL);
+impl_from!(Vec<usize>, DataUS);
 impl_from!(Vec<String>, StrVec);
 impl_from!(VecDeque<String>, StrVecDeq);
 impl_from!(SymBind, SymBind);
 impl_from!(MutStrMap<SVal>, Map);
+impl_from!(MutStrMap<String>, StringMap);
