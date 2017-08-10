@@ -56,6 +56,13 @@ fn regex_strip(expr: &str, line: &str) -> String {
 fn regex_match(expr: &str, line: &str) -> bool {
     Regex::new(expr).unwrap().is_match(line)
 }
+fn regex_matches<'t>(expr: &str, line: &'t str) -> Option<Vec<Captures<'t>>> {
+    if regex_match(expr, line) {
+        Some(Regex::new(expr).unwrap().captures_iter(line).collect())
+    } else {
+        None
+    }
+}
 
 fn set_constmap<'a>(constmap: &mut HashMap<String, String>, consttext: &'a str) -> &'a str {
     for line in consttext.split('\n') {
@@ -80,11 +87,18 @@ fn constmap_lookup(constmap: &HashMap<String, String>, key: &str) -> String {
     }
 }
 
-fn set_register_map<'a>(
+enum Bounds {
+    Range(usize, usize),
+    Single(usize),
+}
+
+fn set_register_map_<'a>(
     regmap: &mut HashMap<String, Vec<String>>,
     regtext: &'a str,
     remove_regmap: bool,
-) -> &'a str {
+) -> Result<&'a str, ::std::num::ParseIntError> {
+    let reg1_re = r"^(\w+)<((?:\d+(?:\s*\-\s*\d+)?\s*\|?\s*)+)>(\w*)(?:\[([0-3])\])?$";
+    let reg2_re = r"^(\w+)(?:\[([0-3])\])?$";
 
     for line in regtext.split("\n") {
         let line = line.trim();
@@ -96,20 +110,55 @@ fn set_register_map<'a>(
         }
         let auto = regex_match(r"~", &line);
         let share = regex_match(r"=", &line);
-        let kv = line.split(r"[:~=]").collect::<Vec<&str>>();
+        let kv = line.split(|c| c == ':' || c == '~' || c == '=')
+            .collect::<Vec<&str>>();
         let (reg_nums, reg_names) = (kv[0], kv[1]);
-        //let mut num_list = Vec::new();
-        for num in reg_nums.split(r"\s*,\s*") {
-            let bounds = num.split(r"\s*\-\s*").collect::<Vec<&str>>();
-            let (start, stop) = (bounds[0], bounds[1]);
+        let mut num_list = Vec::new();
+        for num in reg_nums.split(r",") {
+            let bounds = num.split(r"-").map(|s| s.trim()).collect::<Vec<&str>>();
+            if bounds.len() == 2 {
+                let (start, end): (usize, usize) = (bounds[0].parse()?, bounds[1].parse()?);
+                num_list.push(Bounds::Range(start, end));
+            } else {
+                num_list.push(Bounds::Single(bounds[0].parse()?));
+            }
+        }
+        let name_list = Vec::<String>::new();
+        for name in reg_names.split(",") {
+            let name = name.trim();
+            if regex_match(reg1_re, name) {
+                let caps = &regex_matches(reg1_re, name).unwrap()[0];
+                let (name1, name2, bank) = (&caps[1], &caps[3], &caps[4]);
+                for s in (&caps[2]).split("|") {
 
+                }
+            } else if regex_match(reg2_re, name) {
+                let caps = &regex_matches(reg2_re, name).unwrap()[0];
+            } else {
+                panic!("Bad register name: '{}' at: {}", name, line);
+            }
+        }
+        if (!share && num_list.len() < name_list.len()) || (share && num_list.len() > 1) {
+            panic!("Mismatched register mapping at: {}", &line);
         }
     }
 
     /* XXX */
-    if remove_regmap { "" } else { regtext }
+    if remove_regmap { Ok("") } else { Ok(regtext) }
 }
-
+fn set_register_map<'a>(
+    regmap: &mut HashMap<String, Vec<String>>,
+    regtext: &'a str,
+    remove_regmap: bool,
+) -> &'a str {
+    let result = set_register_map_(regmap, regtext, remove_regmap);
+    match result {
+        Ok(r) => r,
+        Err(e) => {
+            panic!("parse failed: {:?}", e);
+        }
+    }
+}
 fn schedule_blocks(
     block: &str,
     count: usize,
