@@ -5,6 +5,7 @@ use unsafe_lib::MutStrMap;
 
 use regex::{Regex, Captures};
 use sval::*;
+use base_grammar::InstrType;
 
 pub fn test(fp: Box<BufRead>, reg: bool, all: bool) -> io::Result<()> {
     unimplemented!();
@@ -256,6 +257,7 @@ fn parse_instruct(inst: &String, gram: &InstInfo, cap_data: &mut MutStrMap<u32>)
 }
 
 type InstInfo = MutStrMap<SVal>;
+
 
 fn scheduler(block: &str, count: usize, regmap: &MutStrMap<SVal>, debug: bool) -> String {
     let src_reg = vec!["r8", "r20", "r39", "p12", "p29", "p39", "X"];
