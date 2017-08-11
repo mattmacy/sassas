@@ -242,10 +242,105 @@ fn set_register_map<'a>(
         }
     }
 }
+
+fn process_asm_line(line: &str, linenum: usize, inst: &mut MutStrMap<SVal>) -> bool {
+    true
+}
+
+fn preprocess_line(line: &str) -> bool {
+    false
+}
+
+fn parse_instruct(inst: &String, gram: &InstInfo, cap_data: &mut MutStrMap<u32>) -> bool {
+    true
+}
+
+type InstInfo = MutStrMap<SVal>;
+
 fn scheduler(block: &str, count: usize, regmap: &MutStrMap<SVal>, debug: bool) -> String {
+    let src_reg = vec!["r8", "r20", "r39", "p12", "p29", "p39", "X"];
+    let dest_reg = vec!["r0", "p0", "p3", "p45", "p48", "CC"];
+    let itypes = vec!["class", "lat", "rlat", "tput", "dual"];
+    let mut regops = Vec::new();
+    regops.append(&mut src_reg.clone());
+    regops.append(&mut dest_reg.clone());
 
     let vectors: &MutStrMap<SVal> = (&regmap["__vectors"]).into();
     let mut linenum = 0;
+    let (mut comments, mut ordered, mut first, mut instrs) = (Vec::new(), 0, true, Vec::new());
+    for line in block.split("\n") {
+        linenum += 1;
+        if !preprocess_line(&line) {
+            if regex_match(r"\S", line) {
+                comments.push(line)
+            }
+            continue;
+        }
+        let mut inst = MutStrMap::new();
+        if process_asm_line(&line, linenum, &mut inst) {
+            // match an instruction
+            let ctrl: u32 = inst["ctrl"].clone().into();
+            inst["first"] = (first || (ctrl & 0x1_f800) == 0).into();
+            first = false;
+            inst["exeTime"] = 0.into();
+            inst["order"] = ordered.into();
+            if ordered != 0 {
+                ordered += 1;
+            }
+            let comment: String = inst["comment"].clone().into();
+            inst["force_stall"] = (if regex_match(r"FORCE", &comment) {
+                                       ctrl & 0xf
+                                   } else {
+                                       0
+                                   }).into();
+            instrs.push(inst);
+        } else if regex_match(r"^([a-zA-Z]\w*):", line) {
+            // match a label
+            panic!(
+                "SCHEDULE_BLOCK's cannot contain labels. block: {} line: {}",
+                count,
+                linenum
+            );
+        } else if regex_match(r"^<ORDERED>", line) {
+            // open an ORDERED block
+            if ordered != 0 {
+                panic!(" <ORDERED> tags cannot be nested!")
+            }
+            ordered = 1;
+        } else if regex_match(r"^</ORDERED>", line) {
+            // open an ORDERED block
+            if ordered == 0 {
+                panic!("missing opening <ORDERED> tag!")
+            }
+            ordered = 0;
+        } else {
+            panic!(
+                "badly formed line at block: {} line: {}: {}",
+                count,
+                linenum,
+                line
+            );
+        }
+    }
+    /* XXX populate in MaxAsGrammar */
+    let grammar: MutStrMap<Vec<InstInfo>> = MutStrMap::new();
+    for mut inst in instrs {
+        let mut matched = false;
+        // disambiguate for the type checker :-/
+        let op: String = inst["op"].clone().into();
+        for gram in &grammar[&op] {
+            let mut cap_data = MutStrMap::new();
+            if !parse_instruct((&inst["inst"]).into(), &gram, &mut cap_data) {
+                continue;
+            }
+            let mut src : Vec<String> = Vec::new();
+            // copy over instruction types for easier access
+            inst["itypes"] = gram["type"].clone();
+            inst["dual"] = (if inst["dualCnt"].clone().into() { 1 } else { 0 }).into();
+            src.push(inst["predReg"].clone().into());
+
+        }
+    }
 
     /* XXX replaceXMADs*/
     "".into()
