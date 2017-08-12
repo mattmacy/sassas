@@ -143,85 +143,89 @@ static voteT: InstrType = InstrType {
     reuse: false,
 };
 
-#[allow(non_snake_case)]
-fn getP(val: u64, pos: usize) -> u64 {
+fn hex(s: &str) -> u64 {
     unimplemented!();
     0
 }
 
 #[allow(non_snake_case)]
-fn getR(val: u64, pos: u32) -> u64 {
+fn getP(val: &str, pos: usize) -> u64 {
     unimplemented!();
     0
 }
 
 #[allow(non_snake_case)]
-fn getC(val: u64) -> u64 {
+fn getR(val: &str, pos: u32) -> u64 {
     unimplemented!();
     0
 }
 
 #[allow(non_snake_case)]
-fn getF(val: u64, pos: u32, itype: char, trunc: u32) -> u64 {
+fn getC(val: &str) -> u64 {
+    ((hex(val) >> 2) & 0x7fff) << 20
+}
+
+#[allow(non_snake_case)]
+fn getF(val: &str, pos: u32, itype: char, trunc: u32) -> u64 {
     unimplemented!();
     0
 }
 
 #[allow(non_snake_case)]
-fn getI(orig: u64, pos: u32, mask: u32) -> u64 {
+fn getI(orig: &str, pos: u32, mask: u32) -> u64 {
     unimplemented!();
     0
 }
 
 
-pub fn build_operands() -> HashMap<&'static str, Box<Fn(u64) -> u64>> {
-    let mut operands: HashMap<_, Box<Fn(u64) -> u64>> = HashMap::new();
+pub fn build_operands() -> HashMap<&'static str, Box<Fn(&str) -> u64>> {
+    let mut operands: HashMap<_, Box<Fn(&str) -> u64>> = HashMap::new();
 
-    operands.insert("p0", Box::new(|s: u64| getP(s, 0)));
-    operands.insert("p3", Box::new(|s: u64| getP(s, 3)));
-    operands.insert("p12", Box::new(|s: u64| getP(s, 12)));
-    operands.insert("p29", Box::new(|s: u64| getP(s, 29)));
-    operands.insert("p39", Box::new(|s: u64| getP(s, 39)));
-    operands.insert("p45", Box::new(|s: u64| getP(s, 45)));
-    operands.insert("p48", Box::new(|s: u64| getP(s, 48)));
-    operands.insert("p58", Box::new(|s: u64| getP(s, 58)));
+    operands.insert("p0", Box::new(|s: &str| getP(s, 0)));
+    operands.insert("p3", Box::new(|s: &str| getP(s, 3)));
+    operands.insert("p12", Box::new(|s: &str| getP(s, 12)));
+    operands.insert("p29", Box::new(|s: &str| getP(s, 29)));
+    operands.insert("p39", Box::new(|s: &str| getP(s, 39)));
+    operands.insert("p45", Box::new(|s: &str| getP(s, 45)));
+    operands.insert("p48", Box::new(|s: &str| getP(s, 48)));
+    operands.insert("p58", Box::new(|s: &str| getP(s, 58)));
 
-    operands.insert("r0", Box::new(|s: u64| getR(s, 0)));
-    operands.insert("r8", Box::new(|s: u64| getR(s, 8)));
-    operands.insert("r20", Box::new(|s: u64| getR(s, 20)));
-    operands.insert("r28", Box::new(|s: u64| getR(s, 28)));
-    operands.insert("r39s20", Box::new(|s: u64| getR(s, 39)));
-    operands.insert("r39", Box::new(|s: u64| getR(s, 39)));
-    operands.insert("r39a", Box::new(|s: u64| getR(s, 39)));
+    operands.insert("r0", Box::new(|s: &str| getR(s, 0)));
+    operands.insert("r8", Box::new(|s: &str| getR(s, 8)));
+    operands.insert("r20", Box::new(|s: &str| getR(s, 20)));
+    operands.insert("r28", Box::new(|s: &str| getR(s, 28)));
+    operands.insert("r39s20", Box::new(|s: &str| getR(s, 39)));
+    operands.insert("r39", Box::new(|s: &str| getR(s, 39)));
+    operands.insert("r39a", Box::new(|s: &str| getR(s, 39)));
 
-    operands.insert("c20", Box::new(|s: u64| getC(s)));
-    operands.insert("c39", Box::new(|s: u64| getC(s)));
+    operands.insert("c20", Box::new(|s: &str| getC(s)));
+    operands.insert("c39", Box::new(|s: &str| getC(s)));
 
-    operands.insert("c34", Box::new(|s: u64| s << 34));
-    operands.insert("c36", Box::new(|s: u64| s << 36));
+    operands.insert("c34", Box::new(|s: &str| hex(s) << 34));
+    operands.insert("c36", Box::new(|s: &str| hex(s) << 36));
 
-    operands.insert("f20w32", Box::new(|s: u64| getF(s, 20, 'f', 0)));
-    operands.insert("f20", Box::new(|s: u64| getF(s, 20, 'f', 12)));
-    operands.insert("d20", Box::new(|s: u64| getF(s, 20, 'd', 44)));
+    operands.insert("f20w32", Box::new(|s: &str| getF(s, 20, 'f', 0)));
+    operands.insert("f20", Box::new(|s: &str| getF(s, 20, 'f', 12)));
+    operands.insert("d20", Box::new(|s: &str| getF(s, 20, 'd', 44)));
 
-    operands.insert("i8w4", Box::new(|s: u64| getI(s, 8, 0xf)));
-    operands.insert("i20", Box::new(|s: u64| getI(s, 20, 0x7_ffff)));
-    operands.insert("i20w6", Box::new(|s: u64| getI(s, 20, 0x3f)));
-    operands.insert("i20w7", Box::new(|s: u64| getI(s, 20, 0x7f)));
-    operands.insert("i20w8", Box::new(|s: u64| getI(s, 20, 0xff)));
-    operands.insert("i20w12", Box::new(|s: u64| getI(s, 20, 0xfff)));
-    operands.insert("i20w24", Box::new(|s: u64| getI(s, 20, 0xff_ffff)));
-    operands.insert("i20w32", Box::new(|s: u64| getI(s, 20, 0xffff_ffff)));
+    operands.insert("i8w4", Box::new(|s: &str| getI(s, 8, 0xf)));
+    operands.insert("i20", Box::new(|s: &str| getI(s, 20, 0x7_ffff)));
+    operands.insert("i20w6", Box::new(|s: &str| getI(s, 20, 0x3f)));
+    operands.insert("i20w7", Box::new(|s: &str| getI(s, 20, 0x7f)));
+    operands.insert("i20w8", Box::new(|s: &str| getI(s, 20, 0xff)));
+    operands.insert("i20w12", Box::new(|s: &str| getI(s, 20, 0xfff)));
+    operands.insert("i20w24", Box::new(|s: &str| getI(s, 20, 0xff_ffff)));
+    operands.insert("i20w32", Box::new(|s: &str| getI(s, 20, 0xffff_ffff)));
 
-    operands.insert("i31w4", Box::new(|s: u64| getI(s, 31, 0xf)));
-    operands.insert("i34w13", Box::new(|s: u64| getI(s, 34, 0x1fff)));
-    operands.insert("i36w20", Box::new(|s: u64| getI(s, 36, 0xf_ffff)));
-    operands.insert("i39w8", Box::new(|s: u64| getI(s, 39, 0xff)));
-    operands.insert("i28w8", Box::new(|s: u64| getI(s, 28, 0xff)));
-    operands.insert("i28w20", Box::new(|s: u64| getI(s, 28, 0xf_ffff)));
-    operands.insert("i48w20", Box::new(|s: u64| getI(s, 48, 0xff)));
-    operands.insert("i51w5", Box::new(|s: u64| getI(s, 51, 0x1f)));
-    operands.insert("i53w5", Box::new(|s: u64| getI(s, 53, 0x1f)));
+    operands.insert("i31w4", Box::new(|s: &str| getI(s, 31, 0xf)));
+    operands.insert("i34w13", Box::new(|s: &str| getI(s, 34, 0x1fff)));
+    operands.insert("i36w20", Box::new(|s: &str| getI(s, 36, 0xf_ffff)));
+    operands.insert("i39w8", Box::new(|s: &str| getI(s, 39, 0xff)));
+    operands.insert("i28w8", Box::new(|s: &str| getI(s, 28, 0xff)));
+    operands.insert("i28w20", Box::new(|s: &str| getI(s, 28, 0xf_ffff)));
+    operands.insert("i48w20", Box::new(|s: &str| getI(s, 48, 0xff)));
+    operands.insert("i51w5", Box::new(|s: &str| getI(s, 51, 0x1f)));
+    operands.insert("i53w5", Box::new(|s: &str| getI(s, 53, 0x1f)));
 
     operands
 }
