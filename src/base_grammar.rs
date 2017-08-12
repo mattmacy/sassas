@@ -1,6 +1,7 @@
  #![allow(non_upper_case_globals)]
 use unsafe_lib::MutStrMap;
 use std::collections::HashMap;
+use utils::*;
 
 #[derive(Default, Clone, Debug)]
 pub struct InstrType {
@@ -144,8 +145,10 @@ static voteT: InstrType = InstrType {
 };
 
 fn hex(s: &str) -> u64 {
-    unimplemented!();
-    0
+    match s.parse() {
+        Ok(val) => val,
+        Err(err) => panic!("err: {}", err),
+    }
 }
 
 #[allow(non_snake_case)]
@@ -156,8 +159,19 @@ fn getP(val: &str, pos: usize) -> u64 {
 
 #[allow(non_snake_case)]
 fn getR(val: &str, pos: u32) -> u64 {
-    unimplemented!();
-    0
+    let caps = regex_matches(r"^R(\d+|Z)$", val);
+    if caps.len() == 0 || hex(&caps[0][1]) >= 255 {
+        panic!("Bad register name found: {}", val);
+    }
+    if hex(&caps[0][1]) >= 255 {
+        panic!("Bad register name found: {}", val);
+    }
+    let val = hex(&caps[0][1]);
+    if val == 'Z' as u64 {
+        0xff << pos
+    } else {
+        val << pos
+    }
 }
 
 #[allow(non_snake_case)]

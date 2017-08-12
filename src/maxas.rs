@@ -6,6 +6,7 @@ use unsafe_lib::MutStrMap;
 use regex::{Regex, Captures};
 use sval::*;
 use base_grammar::InstrType;
+use utils::*;
 
 pub fn test(fp: Box<BufRead>, reg: bool, all: bool) -> io::Result<()> {
     unimplemented!();
@@ -48,21 +49,6 @@ fn include_file(include: &Vec<String>, file: &str) -> String {
             println!("include failed: {:?}", e);
             ::std::process::exit(1)
         }
-    }
-}
-
-fn regex_strip(expr: &str, line: &str) -> String {
-    (*Regex::new(expr).unwrap().replace_all(line, "")).into()
-}
-
-fn regex_match(expr: &str, line: &str) -> bool {
-    Regex::new(expr).unwrap().is_match(line)
-}
-fn regex_matches<'t>(expr: &str, line: &'t str) -> Option<Vec<Captures<'t>>> {
-    if regex_match(expr, line) {
-        Some(Regex::new(expr).unwrap().captures_iter(line).collect())
-    } else {
-        None
     }
 }
 
@@ -140,7 +126,7 @@ fn set_register_map_<'a>(
         for name in reg_names.split(",") {
             let name = name.trim();
             if regex_match(reg1_re, name) {
-                let caps = &regex_matches(reg1_re, name).unwrap()[0];
+                let caps = &regex_matches(reg1_re, name)[0];
                 let (name1, name2) = (&caps[1], &caps[3]);
                 let bank = if caps.len() > 4 { Some(&caps[4]) } else { None };
                 for s in (&caps[2]).split("|") {
@@ -162,7 +148,7 @@ fn set_register_map_<'a>(
                     }
                 }
             } else if regex_match(reg2_re, name) {
-                let caps = &regex_matches(reg2_re, name).unwrap()[0];
+                let caps = &regex_matches(reg2_re, name)[0];
                 name_list.push(caps[1].into());
                 if caps.len() <= 2 {
                     continue;
@@ -326,7 +312,6 @@ fn scheduler(block: &str, count: usize, regmap: &MutStrMap<SVal>, debug: bool) -
             );
         }
     }
-    /* XXX populate in MaxAsGrammar */
     let grammar: MutStrMap<Vec<InstInfo>> = MutStrMap::new();
     for mut inst in instrs {
         let mut matched = false;

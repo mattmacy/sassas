@@ -26,6 +26,7 @@ mod sval;
 mod unsafe_lib;
 //mod sassas_grammar;
 mod base_grammar;
+mod utils;
 
 #[derive(Debug, Clone)]
 enum CmdArgs {
