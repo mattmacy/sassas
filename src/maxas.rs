@@ -244,7 +244,9 @@ fn set_register_map<'a>(
     }
 }
 
-fn process_asm_line(line: &str, linenum: usize, inst: &mut MutStrMap<SVal>) -> bool {
+type Instr = MutStrMap<SVal>;
+
+fn process_asm_line(line: &str, linenum: usize, inst: &mut Instr) -> bool {
     true
 }
 
@@ -278,7 +280,7 @@ fn scheduler(block: &str, count: usize, regmap: &MutStrMap<SVal>, debug: bool) -
             }
             continue;
         }
-        let mut inst = MutStrMap::new();
+        let mut inst = MutStrMap::<SVal>::new();
         if process_asm_line(&line, linenum, &mut inst) {
             // match an instruction
             let ctrl: u32 = inst["ctrl"].clone().into();
@@ -335,7 +337,7 @@ fn scheduler(block: &str, count: usize, regmap: &MutStrMap<SVal>, debug: bool) -
             if !parse_instruct((&inst["inst"]).into(), &gram, &mut cap_data) {
                 continue;
             }
-            let mut src : Vec<String> = Vec::new();
+            let mut src: Vec<String> = Vec::new();
             // copy over instruction types for easier access
             inst["itypes"] = gram["type"].clone();
             inst["dual"] = (if inst["dualCnt"].clone().into() { 1 } else { 0 }).into();
