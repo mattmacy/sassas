@@ -77,6 +77,7 @@ pub enum SVal {
     Bool(bool),
     Int(i32),
     UInt(u32),
+    U64(u64),
     Float(f32),
     Data(Vec<u8>),
     DataL(Vec<u32>),
@@ -98,6 +99,7 @@ pub enum SVal {
     SymEnt64(Elf64_Sym),
     Map(MutStrMap<SVal>),
     StringMap(MutStrMap<String>),
+    U64Map(MutStrMap<u64>),
     StringVecMap(MutStrMap<Vec<String>>),
     Required,
 }
@@ -135,6 +137,7 @@ macro_rules! impl_from {
 impl_from!(f32, Float);
 impl_from!(i32, Int);
 impl_from!(u32, UInt);
+impl_from!(u64, U64);
 impl_from!(bool, Bool);
 impl_from!(String, Str);
 impl_from!(Elf32_Sym, SymEnt32);
@@ -156,4 +159,5 @@ impl_from!(VecDeque<String>, StrVecDeq);
 impl_from!(SymBind, SymBind);
 impl_from!(MutStrMap<SVal>, Map);
 impl_from!(MutStrMap<String>, StringMap);
+impl_from!(MutStrMap<u64>, U64Map);
 impl_from!(MutStrMap<Vec<String>>, StringVecMap);
