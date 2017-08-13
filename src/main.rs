@@ -18,12 +18,11 @@ use std::path::Path;
 use std::collections::VecDeque;
 use std::io::{Read, Write, BufRead, BufReader};
 use std::fs::File;
+use utils::KernelSection;
 
-mod elf;
+
 mod cubin;
 mod maxas;
-mod sval;
-mod unsafe_lib;
 mod sassas_grammar;
 mod utils;
 
@@ -188,7 +187,7 @@ fn sass_list(file: &String) -> io::Result<()> {
         addr_size
     );
     for (k, v) in kernels.iter() {
-        let ker: sval::KernelSection = v.clone().into();
+        let ker: KernelSection = v.clone().into();
         println!(
             "Kernel: {} (Linkage: {:?}, Params: {}, Size: {}, Registers: {}, SharedMem: {}, Barriers: {}",
             k,
@@ -229,7 +228,7 @@ fn sass_extract_cubin(
     let kernels = bin.list_kernels();
     let first_kernel = kernels.keys().nth(0).unwrap().clone();
     let kernel_name = kernel_name.clone().unwrap_or(first_kernel);
-    let kernel: &sval::KernelSection = kernels
+    let kernel: &KernelSection = kernels
         .get(&kernel_name)
         .expect(&format!("bad kernel: {}", kernel_name))
         .into();

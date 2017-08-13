@@ -1,5 +1,5 @@
-use elf::{Elf32_Phdr, Elf32_Shdr, Elf32_Sym, Elf64_Phdr, Elf64_Shdr, Elf64_Sym};
-use unsafe_lib::MutStrMap;
+use utils::elf::{Elf32_Phdr, Elf32_Shdr, Elf32_Sym, Elf64_Phdr, Elf64_Shdr, Elf64_Sym};
+use utils::unsafe_lib::MutStrMap;
 use std::collections::{VecDeque, HashMap};
 
 #[derive(Clone, Debug, Default)]

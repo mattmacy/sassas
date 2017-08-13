@@ -3,11 +3,10 @@ use memmap::{Mmap, Protection};
 use std::{io, slice, mem};
 use std::collections::{VecDeque, HashMap};
 use itertools::zip;
-use sval::{SVal, SymBind, KernelSection, SecHdr, ElfSymbol};
-use unsafe_lib::MutStrMap;
-use elf;
-use elf::{Elf32_Ehdr, Elf32_Phdr, Elf32_Shdr, Elf32_Sym, Elf64_Ehdr, Elf64_Phdr, Elf64_Shdr,
-          Elf64_Sym};
+use utils::{SVal, MutStrMap, SymBind, KernelSection, SecHdr, ElfSymbol};
+use utils::elf;
+use utils::{Elf32_Ehdr, Elf32_Phdr, Elf32_Shdr, Elf32_Sym, Elf64_Ehdr, Elf64_Phdr, Elf64_Shdr,
+            Elf64_Sym};
 
 pub struct Cubin {
     pub arch: u32,

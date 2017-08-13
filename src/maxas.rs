@@ -1,12 +1,10 @@
 use std::io::{Read, Write, BufRead, BufReader};
 use std::{io, path, fs, ops};
 use std::collections::{HashMap, VecDeque};
-use unsafe_lib::MutStrMap;
+use utils::{regex_strip, regex_matches, regex_match, SVal, KernelSection, MutStrMap};
 
 use regex::{Regex, Captures};
-use sval::*;
 use sassas_grammar::InstrType;
-use utils::*;
 
 pub fn test(fp: Box<BufRead>, reg: bool, all: bool) -> io::Result<()> {
     unimplemented!();
@@ -313,6 +311,7 @@ fn scheduler(block: &str, count: usize, regmap: &MutStrMap<SVal>, debug: bool) -
         }
     }
     let grammar: MutStrMap<Vec<InstInfo>> = MutStrMap::new();
+    //let grammar = ::sassas_grammar::build_grammar();
     for mut inst in instrs {
         let mut matched = false;
         // disambiguate for the type checker :-/

@@ -1,8 +1,6 @@
  #![allow(non_upper_case_globals)]
-use unsafe_lib::{MutMap, MutStrMap};
 use std::collections::HashMap;
-use utils::*;
-use sval::*;
+use utils::{MutMap, MutStrMap, regex_matches, regex_match, re_matches, re_match_names, SVal};
 use regex::Regex;
 
 static flagsstr: &str = "\
@@ -1567,7 +1565,6 @@ pub fn build_flags() -> MutStrMap<MutStrMap<SVal>> {
     }
     flags
 }
-
 
 pub fn parse_instruct<'i, 'r>(
     inst: &'i str,
