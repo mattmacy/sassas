@@ -1712,6 +1712,28 @@ pub fn read_ctrl(ctrl: &str, context: &str) -> u64 {
     }
     (watdb << 11) | (readb << 8) | (wrtdb << 5) | (yieldf << 4) | (stall << 0)
 }
+pub fn process_sass_ctrl_line(
+    line: &str,
+    ctrl: Option<&mut Vec<u64>>,
+    ruse: Option<&mut Vec<u64>>,
+) -> bool {
+    let matches = regex_matches(r"^\s+\/\* (0x[0-9a-f]+)", line);
+    if matches.is_empty() {
+        return false;
+    }
+    let code = hex(&matches[0][1]);
+    if let Some(r) = ctrl {
+        r.push((code & 0x000000000001ffff) >> 0);
+        r.push((code & 0x0000003fffe00000) >> 21);
+        r.push((code & 0x07fffc0000000000) >> 42);
+    }
+    if let Some(r) = ruse {
+        r.push((code & 0x00000000001e0000) >> 17);
+        r.push((code & 0x000003c000000000) >> 38);
+        r.push((code & 0x7800000000000000) >> 59)
+    }
+    true
+}
 
 pub fn get_reg_num<'a, 'b>(regmap: &'a MutStrMap<SVal>, regname: &'b str) -> String {
     if regmap.contains_key(regname) {
@@ -1811,6 +1833,8 @@ pub struct SassGrammar {
     comm_re: Regex,
     asm_re: Regex,
     sass_re: Regex,
+    flags: MutStrMap<MutStrMap<SVal>>,
+    immed_codes: HashMap<u64, u64>,
 }
 
 impl SassGrammar {
@@ -1836,6 +1860,11 @@ impl SassGrammar {
         let comm_re = Regex::new(comm_re_str).unwrap();
         let asm_re = Regex::new(&asm_re_str).unwrap();
         let sass_re = Regex::new(&sass_re_str).unwrap();
+        let mut immed_codes: HashMap<u64, u64> = HashMap::new();
+        immed_codes.insert(0x5c, 0x64);
+        immed_codes.insert(0x5b, 0x6d);
+        immed_codes.insert(0x59, 0x6b);
+        immed_codes.insert(0x58, 0x68);
         SassGrammar {
             ctrl_re: ctrl_re,
             pred_re: pred_re,
@@ -1843,18 +1872,51 @@ impl SassGrammar {
             comm_re: comm_re,
             asm_re: asm_re,
             sass_re: sass_re,
+            flags: build_flags(),
+            immed_codes: immed_codes,
         }
     }
-    pub fn gen_reuse_code<'i, 'r>(&self, cap_data: &HashMap<&'r str, &'i str>) -> u64 {
+    pub fn gen_reuse_code<'i, 'r>(&self, cap_data: &mut HashMap<&'r str, &'i str>) -> u64 {
         unimplemented!();
         0
     }
-    pub fn gen_code<'i, 'r>(
+    pub fn gen_code<'a, 'i, 'r>(
         &self,
         op: &str,
-        cap_data: &HashMap<&'r str, &'i str>,
-        test: bool,
+        grammar: &GrammarElt,
+        cap_data: &mut HashMap<&'r str, &'i str>,
+        mut test: Option<&mut Vec<&'static str>>,
     ) -> (u64, u64) {
+        let flags = &self.flags[op];
+        let mut code = grammar.code;
+        let reuse = 0 as u64;
+        let immed_code = self.immed_codes[&(code >> 56)];
+        if cap_data.contains_key("noPred") {
+            cap_data.remove("noPred");
+            if let Some(ref mut r) = test {
+                r.push("noPred");
+            }
+        } else {
+            let mut p = if cap_data.contains_key("predNum") {
+                hex(cap_data["predNum"])
+            } else {
+                7
+            };
+            if let Some(ref mut r) = test {
+                r.push("PredNum");
+            }
+            if cap_data.contains_key("predNot") {
+                p |= 8;
+                if let Some(ref mut r) = test {
+                    r.push("PredNot");
+                }
+                code ^= p << 16;
+                cap_data.remove("predNum");
+                cap_data.remove("predNot");
+            }
+
+        }
+
         unimplemented!();
         (0, 0)
     }
@@ -1903,29 +1965,6 @@ impl SassGrammar {
             normalize_spacing(&format!("{}{}{}", map["pred"], map["op"], map["rest"])).into(),
         );
         cap_data.insert("code", hex(map["code"]).into());
-        true
-    }
-    pub fn process_sass_ctrl_line(
-        &self,
-        line: &str,
-        ctrl: Option<&mut Vec<u64>>,
-        ruse: Option<&mut Vec<u64>>,
-    ) -> bool {
-        let matches = regex_matches(r"^\s+\/\* (0x[0-9a-f]+)", line);
-        if matches.is_empty() {
-            return false;
-        }
-        let code = hex(&matches[0][1]);
-        if let Some(r) = ctrl {
-            r.push((code & 0x000000000001ffff) >> 0);
-            r.push((code & 0x0000003fffe00000) >> 21);
-            r.push((code & 0x07fffc0000000000) >> 42);
-        }
-        if let Some(r) = ruse {
-            r.push((code & 0x00000000001e0000) >> 17);
-            r.push((code & 0x000003c000000000) >> 38);
-            r.push((code & 0x7800000000000000) >> 59)
-        }
         true
     }
 }
