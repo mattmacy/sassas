@@ -166,9 +166,9 @@ impl<'a, V: Default> Index<&'a String> for MutStrMap<V> {
         &self.map[idx]
     }
 }
-impl<'a, V: Default> Index<&'static str> for MutStrMap<V> {
+impl<'a, V: Default> Index<&'a str> for MutStrMap<V> {
     type Output = V;
-    fn index(&self, idx: &'static str) -> &Self::Output {
+    fn index(&self, idx: &'a str) -> &Self::Output {
         &self.map[&idx.into()]
     }
 }
@@ -177,8 +177,8 @@ impl<'a, V: Default> IndexMut<&'a String> for MutStrMap<V> {
         &mut self.map[idx]
     }
 }
-impl<'a, V: Default> IndexMut<&'static str> for MutStrMap<V> {
-    fn index_mut(&mut self, idx: &'static str) -> &mut Self::Output {
+impl<'a, V: Default> IndexMut<&'a str> for MutStrMap<V> {
+    fn index_mut(&mut self, idx: &'a str) -> &mut Self::Output {
         &mut self.map[&idx.into()]
     }
 }
