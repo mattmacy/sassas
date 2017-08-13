@@ -112,7 +112,7 @@ impl Default for SVal {
     }
 }
 impl SVal {
-    pub fn to_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         match *self {
             SVal::Str(ref s) => s.as_str(),
             _ => panic!("unmatched type {:?}", self),
