@@ -22,7 +22,7 @@ use utils::KernelSection;
 
 
 mod cubin;
-mod maxas;
+mod sassas;
 mod sassas_grammar;
 mod utils;
 
@@ -214,7 +214,7 @@ fn sass_test(reg: bool, all: bool, file: &String) -> io::Result<()> {
         let fh = File::open(file)?;
         Box::new(BufReader::<File>::new(fh))
     };
-    maxas::test(fp, reg, all)?;
+    sassas::test(fp, reg, all)?;
     Ok(())
 }
 
@@ -265,7 +265,7 @@ fn sass_extract_cubin(
         None
     };
     out.write_all(b"#\n# Instructions:\n\n")?;
-    maxas::extract(fp, out, params)?;
+    sassas::extract(fp, out, params)?;
     Ok(())
 }
 
@@ -279,7 +279,7 @@ fn sass_extract_sass(sass_file: &String, asm_file: &Option<String>) -> io::Resul
     };
     let fh = File::open(sass_file)?;
     let fp = Box::new(BufReader::<File>::new(fh));
-    maxas::extract(fp, out, None)?;
+    sassas::extract(fp, out, None)?;
     Ok(())
 }
 
@@ -324,7 +324,7 @@ fn sass_insert(
     };
     let new_cubin_file = new_cubin_file.clone().unwrap_or(cubin_file.clone());
     let include = Vec::new();
-    let mut kernel = maxas::assemble(sass_file, include, !noreuse)?;
+    let mut kernel = sassas::assemble(sass_file, include, !noreuse)?;
     let mut cubin = Cubin::new(cubin_file)?;
     kernel.map.insert(
         "Kernel",
@@ -354,7 +354,7 @@ fn sass_pre(debug: bool, sass_file: &String, new_asm_file: &Option<String>) -> i
     let fh = File::open(sass_file)?;
     let fp = Box::new(BufReader::<File>::new(fh));
     let include = Vec::new();
-    let result = maxas::preprocess(fp, &include, debug, None)?;
+    let result = sassas::preprocess(fp, &include, debug, None)?;
     out.write_all(result.as_bytes())?;
     Ok(())
 }
