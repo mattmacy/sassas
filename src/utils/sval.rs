@@ -1,6 +1,7 @@
 use utils::elf::{Elf32_Phdr, Elf32_Shdr, Elf32_Sym, Elf64_Phdr, Elf64_Shdr, Elf64_Sym};
 use utils::unsafe_lib::MutStrMap;
 use std::collections::{VecDeque, HashMap};
+use sassas_grammar::InstrType;
 
 #[derive(Clone, Debug, Default)]
 pub struct KernelSection {
@@ -17,7 +18,7 @@ pub struct KernelSection {
     pub map: HashMap<&'static str, SVal>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub enum ElfSymbol {
     Sym32(Elf32_Sym),
     Sym64(Elf64_Sym),
@@ -89,6 +90,7 @@ pub enum SVal {
     Elf64Shdrs(Vec<Elf64_Shdr>),
     Elf32Shdr(Elf32_Shdr),
     Elf64Shdr(Elf64_Shdr),
+    IType(InstrType),
     KernelSection(KernelSection),
     Str(String),
     StrVec(Vec<String>),
@@ -107,6 +109,14 @@ pub enum SVal {
 impl Default for SVal {
     fn default() -> Self {
         SVal::Required
+    }
+}
+impl SVal {
+    pub fn to_str(&self) -> &str {
+        match *self {
+            SVal::Str(ref s) => s.as_str(),
+            _ => panic!("unmatched type {:?}", self),
+        }
     }
 }
 
@@ -157,6 +167,7 @@ impl_from!(Vec<Elf32_Shdr>, Elf32Shdrs);
 impl_from!(Vec<Elf64_Shdr>, Elf64Shdrs);
 impl_from!(Elf32_Shdr, Elf32Shdr);
 impl_from!(Elf64_Shdr, Elf64Shdr);
+impl_from!(InstrType, IType);
 impl_from!(ElfSymbol, ElfSymbol);
 impl_from!(KernelSection, KernelSection);
 impl_from!(SecHdr, SecHdr);
