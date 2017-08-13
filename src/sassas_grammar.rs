@@ -1624,6 +1624,27 @@ pub fn build_flags() -> MutStrMap<MutStrMap<SVal>> {
     flags
 }
 
+fn re_matches_by_name<'i, 'r>(
+    line: &'i str,
+    rule: &'r Regex,
+    cap_data: &mut HashMap<&'r str, &'i str>,
+) -> bool {
+    let matches = re_matches(rule, line);
+    let names = re_match_names(rule);
+    if matches.is_empty() {
+        return false;
+    }
+    for caps in matches {
+        for name in &names {
+            let name_match = caps.name(name);
+            if name_match.is_some() {
+                cap_data.insert(name, name_match.unwrap().as_str());
+            }
+        }
+    }
+    return true;
+}
+
 pub fn parse_instruct<'i, 'r>(
     inst: &'i str,
     rule: &'r Regex,
@@ -1631,7 +1652,7 @@ pub fn parse_instruct<'i, 'r>(
 ) -> bool {
     let matches = re_matches(rule, inst);
     let names = re_match_names(rule);
-    if matches.len() == 0 {
+    if matches.is_empty() {
         return false;
     }
     for caps in matches {
@@ -1699,47 +1720,130 @@ pub fn get_reg_num<'a, 'b>(regmap: &'a MutStrMap<SVal>, regname: &'b str) -> Str
         regname.into()
     }
 }
-pub fn get_vec_registers<'i, 'r>(
-    vectors: &MutStrMap<Vec<String>>,
-    cap_data: &HashMap<&'r str, &'i str>,
+pub fn get_vec_registers(
+    vectors: &HashMap<&str, Vec<String>>,
+    cap_data: &HashMap<&str, &str>,
 ) -> Option<String> {
     let regname = cap_data.get("r0");
     let regname = if regname.is_some() {
-        regname.unwrap()
+        *regname.unwrap()
+    } else {
+        return None;
+    };
+    if regname == "RZ" {
+        return None;
+    }
+    if cap_data["type"] == ".64" || cap_data["131w4"] == "0x3" {
+        let matches = regex_matches(r"^R(\d+)$", regname);
+        if !matches.is_empty() {
+            let n = hex(&matches[0][1]);
+            return Some(format!("R{}R{}", n, n + 1));
+        }
+        if !vectors.contains_key(regname) {
+            println!("{} is not a 64bit vector register", regname);
+        }
+        let reg = &vectors[regname];
+        return Some(format!("{}{}", reg[0], reg[1]));
+    }
+
+    if cap_data["type"] == ".128" || cap_data["131w4"] == "0xf" {
+        let matches = regex_matches(r"^R(\d+)$", regname);
+        if !matches.is_empty() {
+            let n = hex(&matches[0][1]);
+            return Some(format!("R{}R{}R{}R{}", n, n + 1, n + 2, n + 3));
+        }
+        if !vectors.contains_key(regname) || vectors[regname].len() != 4 {
+            println!("{} is not a 128bit vector register", regname);
+        }
+        Some(
+            vectors[regname]
+                .iter()
+                .map(|s| s.clone())
+                .collect::<String>(),
+        );
+    }
+
+    Some(regname.into())
+}
+
+pub fn get_addr_vec_registers<'a>(
+    vectors: &'a HashMap<&'a str, Vec<String>>,
+    cap_data: &'a HashMap<&'a str, &str>,
+) -> Option<String> {
+    let regname = cap_data.get("r8");
+    let regname = if let Some(r) = regname {
+        r
     } else {
         return None;
     };
     if *regname == "RZ" {
         return None;
     }
-    if cap_data["type"] == ".64" || cap_data["131w4"] == "0x3" {
-        let matches = regex_matches(r"^R(\d+)$", regname);
-        if matches.len() != 0 {}
-
+    if !cap_data.contains_key("E") {
+        return Some(regname.clone().into());
     }
-    if cap_data["type"] == ".128" || cap_data["131w4"] == "0xf" {
-        let matches = regex_matches(r"^R(\d+)$", regname);
-        if matches.len() != 0 {}
+    let matches = regex_matches(r"^R(\d+)$", regname);
+    if !matches.is_empty() {
+        let n = hex(&matches[0][1]);
+        return Some(format!("R{}R{}", n, n + 1));
     }
-
-    Some("".into())
-}
-pub fn get_addr_vec_registers<'i, 'r>(
-    vectors: &MutStrMap<Vec<String>>,
-    cap_data: &HashMap<&'r str, &'i str>,
-) -> String {
-
-    "".into()
+    if !vectors.contains_key(regname) {
+        println!("{:?}", vectors);
+        println!("{} not a 64bit vector register", regname);
+    }
+    Some(
+        vectors[regname][0..1]
+            .iter()
+            .map(|s| s.clone())
+            .collect::<String>(),
+    )
 }
 pub fn replace_xmads(file: &str) -> String {
+
+
     unimplemented!();
     "".into()
 }
-pub struct SassGrammar {}
+pub struct SassGrammar {
+    ctrl_re: Regex,
+    pred_re: Regex,
+    inst_re: Regex,
+    comm_re: Regex,
+    asm_re: Regex,
+    sass_re: Regex,
+}
 
 impl SassGrammar {
     pub fn new() -> Self {
-        SassGrammar {}
+        let pred_re_str = r"(?<pred>@!?(?<predReg>P\d)\s+)";
+        let inst_re_base_str = r"?(?<op>\w+)(?<rest>[^;]*;)";
+        let ctrl_re_str = r"(?<ctrl>[0-9a-fA-F\-]{2}:[1-6\-]:[1-6\-]:[\-yY]:[0-9a-fA-F])";
+        let inst_re_str = format!("{}{}", pred_re_str, inst_re_base_str);
+        let comm_re_str = r"(?<comment>.*)";
+        let asm_re_str = format!(
+            r"^{}(?<space>\s+){}{}",
+            ctrl_re_str,
+            inst_re_str,
+            comm_re_str
+        );
+        let sass_re_str = format!(
+            r"^\s+/\*(?<num>[0-9a-f]+)\*/\s+{}\s+/\* (?<code>0x[0-9a-f]+)",
+            inst_re_str
+        );
+        let ctrl_re = Regex::new(ctrl_re_str).unwrap();
+        let pred_re = Regex::new(pred_re_str).unwrap();
+        let inst_re = Regex::new(&inst_re_str).unwrap();
+        let comm_re = Regex::new(comm_re_str).unwrap();
+        let asm_re = Regex::new(&asm_re_str).unwrap();
+        let sass_re = Regex::new(&sass_re_str).unwrap();
+        SassGrammar {
+            ctrl_re: ctrl_re,
+            pred_re: pred_re,
+            inst_re: inst_re,
+            comm_re: comm_re,
+            asm_re: asm_re,
+            sass_re: sass_re,
+        }
     }
     pub fn gen_reuse_code<'i, 'r>(&self, cap_data: &HashMap<&'r str, &'i str>) -> u64 {
         unimplemented!();
@@ -1758,27 +1862,70 @@ impl SassGrammar {
         &self,
         line: &str,
         linenum: usize,
-        cap_data: &mut HashMap<&'r str, &'i str>,
+        cap_data: &mut HashMap<&'r str, SVal>,
     ) -> bool {
-        unimplemented!();
-        false
+        let mut map = HashMap::new();
+        if !re_matches_by_name(line, &self.asm_re, &mut map) {
+            return false;
+        }
+        cap_data.insert("linenum", linenum.into());
+        cap_data.insert("pred", map["pred"].into());
+        cap_data.insert("predReg", map["predReg"].into());
+        cap_data.insert("space", map["space"].into());
+        cap_data.insert("op", map["op"].into());
+        cap_data.insert("comment", map["comment"].into());
+        cap_data.insert(
+            "inst",
+            normalize_spacing(&format!("{}{}{}", map["pred"], map["op"], map["rest"])).into(),
+        );
+        cap_data.insert("ctrl", read_ctrl(map["ctrl"], line).into());
+        true
     }
     pub fn process_sass_line<'r, 'i>(
         &self,
-        line: &str,
+        line: &'i str,
         linenum: usize,
-        cap_data: &mut HashMap<&'r str, &'i str>,
+        cap_data: &mut HashMap<&'r str, SVal>,
     ) -> bool {
-        unimplemented!();
-        false
+        let mut map = HashMap::new();
+        if !re_matches_by_name(line, &self.sass_re, &mut map) {
+            return false;
+        }
+        cap_data.insert("num", hex(map["num"]).into());
+        cap_data.insert("pred", map["pred"].into());
+        cap_data.insert("op", map["op"].into());
+        cap_data.insert(
+            "ins",
+            normalize_spacing(&format!("{}{}", map["op"], map["rest"])).into(),
+        );
+        cap_data.insert(
+            "inst",
+            normalize_spacing(&format!("{}{}{}", map["pred"], map["op"], map["rest"])).into(),
+        );
+        cap_data.insert("code", hex(map["code"]).into());
+        true
     }
     pub fn process_sass_ctrl_line(
         &self,
         line: &str,
-        ctrl: &mut Vec<u64>,
-        ruse: &mut Vec<u64>,
+        ctrl: Option<&mut Vec<u64>>,
+        ruse: Option<&mut Vec<u64>>,
     ) -> bool {
-        unimplemented!();
-        false
+        let matches = regex_matches(r"^\s+\/\* (0x[0-9a-f]+)", line);
+        if matches.is_empty() {
+            return false;
+        }
+        let code = hex(&matches[0][1]);
+        if let Some(r) = ctrl {
+            r.push((code & 0x000000000001ffff) >> 0);
+            r.push((code & 0x0000003fffe00000) >> 21);
+            r.push((code & 0x07fffc0000000000) >> 42);
+        }
+        if let Some(r) = ruse {
+            r.push((code & 0x00000000001e0000) >> 17);
+            r.push((code & 0x000003c000000000) >> 38);
+            r.push((code & 0x7800000000000000) >> 59)
+        }
+        true
     }
 }
