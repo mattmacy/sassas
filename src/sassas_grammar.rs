@@ -693,9 +693,9 @@ impl Default for GrammarEltBase {
 
 #[derive(Clone, Debug)]
 pub struct GrammarElt {
-    itype: &'static InstrType,
-    code: u64,
-    rule: Regex,
+    pub itype: &'static InstrType,
+    pub code: u64,
+    pub rule: Regex,
 }
 impl<'a> From<&'a GrammarEltBase> for GrammarElt {
     fn from(src: &'a GrammarEltBase) -> Self {
@@ -928,7 +928,7 @@ fn getI(orig: &str, pos: u32, mask: i64) -> u64 {
 }
 
 
-pub fn build_operands<'a>() -> HashMap<&'a str, Box<Fn(&str) -> u64>> {
+fn build_operands<'a>() -> HashMap<&'a str, Box<Fn(&str) -> u64>> {
     let mut operands: HashMap<_, Box<Fn(&str) -> u64>> = HashMap::new();
 
     operands.insert("p0", Box::new(|s: &str| getP(s, 0)));
@@ -980,7 +980,7 @@ pub fn build_operands<'a>() -> HashMap<&'a str, Box<Fn(&str) -> u64>> {
     operands
 }
 
-pub fn build_grammar() -> HashMap<&'static str, Vec<GrammarElt>> {
+fn build_grammar<'a>() -> HashMap<&'a str, Vec<GrammarElt>> {
     let mut base_grammar = MutMap::new();
 
     base_grammar.insert("ATOM", vec![
@@ -1579,7 +1579,7 @@ pub fn build_grammar() -> HashMap<&'static str, Vec<GrammarElt>> {
     grammar
 }
 
-pub fn build_flags() -> MutStrMap<MutStrMap<SVal>> {
+fn build_flags() -> MutStrMap<MutStrMap<SVal>> {
     // filter white space and convert to vec
     let flagsvec = flagsstr
         .split("\n")
@@ -1827,18 +1827,19 @@ pub fn replace_xmads(file: &str) -> String {
     "".into()
 }
 pub struct SassGrammar<'a> {
-    ctrl_re: Regex,
-    pred_re: Regex,
-    inst_re: Regex,
-    comm_re: Regex,
-    asm_re: Regex,
-    sass_re: Regex,
-    flags: MutStrMap<MutStrMap<SVal>>,
-    immed_codes: HashMap<u64, u64>,
-    reuse_codes: HashMap<&'a str, u64>,
-    immed_ops: Vec<&'a str>,
-    const_codes: HashMap<&'a str, u64>,
-    operands: HashMap<&'a str, Box<Fn(&str) -> u64>>,
+    pub ctrl_re: Regex,
+    pub pred_re: Regex,
+    pub inst_re: Regex,
+    pub comm_re: Regex,
+    pub asm_re: Regex,
+    pub sass_re: Regex,
+    pub flags: MutStrMap<MutStrMap<SVal>>,
+    pub immed_codes: HashMap<u64, u64>,
+    pub reuse_codes: HashMap<&'a str, u64>,
+    pub immed_ops: Vec<&'a str>,
+    pub const_codes: HashMap<&'a str, u64>,
+    pub operands: HashMap<&'a str, Box<Fn(&str) -> u64>>,
+    pub grammar: HashMap<&'a str, Vec<GrammarElt>>,
 }
 
 impl<'a> SassGrammar<'a> {
@@ -1890,6 +1891,7 @@ impl<'a> SassGrammar<'a> {
             immed_ops: immed_ops,
             const_codes: const_codes,
             operands: build_operands(),
+            grammar: build_grammar(),
         }
     }
     pub fn gen_reuse_code<'i, 'r>(&self, cap_data: &mut HashMap<&'r str, &'i str>) -> u64 {
@@ -1987,11 +1989,11 @@ impl<'a> SassGrammar<'a> {
         }
         (code, reuse)
     }
-    pub fn process_asm_line<'r, 'i>(
+    pub fn process_asm_line(
         &self,
         line: &str,
         linenum: usize,
-        cap_data: &mut HashMap<&'r str, SVal>,
+        cap_data: &mut MutStrMap<SVal>,
     ) -> bool {
         let mut map = HashMap::new();
         if !re_matches_by_name(line, &self.asm_re, &mut map) {
