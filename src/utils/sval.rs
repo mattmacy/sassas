@@ -78,6 +78,7 @@ pub enum SVal {
     Int(i32),
     UInt(u32),
     U64(u64),
+    USize(usize),
     Float(f32),
     Data(Vec<u8>),
     DataL(Vec<u32>),
@@ -134,10 +135,18 @@ macro_rules! impl_from {
         }
     )
 }
+
+impl<'a> From<&'a str> for SVal {
+    fn from(input: &'a str) -> Self {
+        SVal::Str(input.into())
+    }
+}
+
 impl_from!(f32, Float);
 impl_from!(i32, Int);
 impl_from!(u32, UInt);
 impl_from!(u64, U64);
+impl_from!(usize, USize);
 impl_from!(bool, Bool);
 impl_from!(String, Str);
 impl_from!(Elf32_Sym, SymEnt32);
