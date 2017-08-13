@@ -4,7 +4,7 @@ use std::collections::{HashMap, VecDeque};
 use utils::{regex_strip, regex_matches, regex_match, SVal, KernelSection, MutStrMap};
 
 use regex::{Regex, Captures};
-use sassas_grammar::InstrType;
+use sassas_grammar::*;
 
 pub fn test(fp: Box<BufRead>, reg: bool, all: bool) -> io::Result<()> {
     unimplemented!();
@@ -20,8 +20,11 @@ pub fn extract(
     Ok(())
 }
 
-pub fn assemble(file: &String, include: Vec<String>, reuse: bool) -> io::Result<KernelSection> {
+pub fn assemble(file: &String, include: &Vec<String>, reuse: bool) -> io::Result<KernelSection> {
     let mut kernel_sec = KernelSection::default();
+    let mut regmap = MutStrMap::new();
+    let file = preprocess(file, include, false, Some(&mut regmap));
+
     unimplemented!();
     Ok(kernel_sec)
 }
@@ -228,24 +231,18 @@ fn set_register_map<'a>(
     }
 }
 
-type Instr = MutStrMap<SVal>;
-
-fn process_asm_line(line: &str, linenum: usize, inst: &mut Instr) -> bool {
-    true
-}
-
 fn preprocess_line(line: &str) -> bool {
+    unimplemented!();
     false
 }
 
-fn parse_instruct(inst: &String, gram: &InstInfo, cap_data: &mut MutStrMap<u32>) -> bool {
-    true
-}
-
-type InstInfo = MutStrMap<SVal>;
-
-
-fn scheduler(block: &str, count: usize, regmap: &MutStrMap<SVal>, debug: bool) -> String {
+fn scheduler(
+    sg: &SassGrammar,
+    block: &str,
+    count: usize,
+    regmap: &MutStrMap<SVal>,
+    debug: bool,
+) -> String {
     let src_reg = vec!["r8", "r20", "r39", "p12", "p29", "p39", "X"];
     let dest_reg = vec!["r0", "p0", "p3", "p45", "p48", "CC"];
     let itypes = vec!["class", "lat", "rlat", "tput", "dual"];
@@ -264,8 +261,8 @@ fn scheduler(block: &str, count: usize, regmap: &MutStrMap<SVal>, debug: bool) -
             }
             continue;
         }
-        let mut inst = MutStrMap::<SVal>::new();
-        if process_asm_line(&line, linenum, &mut inst) {
+        let mut inst = MutStrMap::new();
+        if sg.process_asm_line(&line, linenum, &mut inst) {
             // match an instruction
             let ctrl: u32 = inst["ctrl"].clone().into();
             inst["first"] = (first || (ctrl & 0x1_f800) == 0).into();
@@ -310,23 +307,24 @@ fn scheduler(block: &str, count: usize, regmap: &MutStrMap<SVal>, debug: bool) -
             );
         }
     }
-    let grammar: MutStrMap<Vec<InstInfo>> = MutStrMap::new();
-    //let grammar = ::sassas_grammar::build_grammar();
+    let grammar = &sg.grammar;
     for mut inst in instrs {
         let mut matched = false;
         // disambiguate for the type checker :-/
         let op: String = inst["op"].clone().into();
-        for gram in &grammar[&op] {
-            let mut cap_data = MutStrMap::new();
-            if !parse_instruct((&inst["inst"]).into(), &gram, &mut cap_data) {
+        // cap_data can capture immutable references so create local copy
+        let inst_str: String = inst["inst"].clone().into();
+        for gram in grammar[op.as_str()].iter() {
+            let mut cap_data = HashMap::new();
+            if !parse_instruct(&inst_str, &gram.rule, &mut cap_data) {
                 continue;
             }
             let mut src: Vec<String> = Vec::new();
             // copy over instruction types for easier access
-            inst["itypes"] = gram["type"].clone();
+            // XXX this creates a new regex instance
+            inst["itypes"] = gram.itype.clone().into();
             inst["dual"] = (if inst["dualCnt"].clone().into() { 1 } else { 0 }).into();
             src.push(inst["predReg"].clone().into());
-
         }
     }
 
@@ -335,12 +333,11 @@ fn scheduler(block: &str, count: usize, regmap: &MutStrMap<SVal>, debug: bool) -
 }
 
 pub fn preprocess(
-    mut fp: Box<BufRead>,
+    file: &String,
     include: &Vec<String>,
     debug: bool,
-    regmap: Option<MutStrMap<SVal>>,
+    regmap: Option<&mut MutStrMap<SVal>>,
 ) -> io::Result<String> {
-    let file = String::from_utf8(fp.fill_buf()?.to_vec()).expect("failed to convert input file");
     let comment_re = r#"^[\t ]*<COMMENT>.*?^\s*</COMMENT>\n?"#;
     let include_re = r#"^[\t ]*<INCLUDE\s+file="([^"]+)"\s*/?>\n?"#;
     let code_re = r"^[\t ]*<CODE(\d*)>(.*?)^\s*<\/CODE\1>\n?";
@@ -348,9 +345,14 @@ pub fn preprocess(
     let regmap_re = r"^[\t ]*<REGISTER_MAPPING>(.*?)^\s*</REGISTER_MAPPING>\n?";
     let schedule_re = r"^[\t ]*<SCHEDULE_BLOCK>(.*?)^\s*</SCHEDULE_BLOCK>\n?";
     let inline_re = r"\[(\+|\-)(.+?)\1\]";
+    let sg = SassGrammar::new();
+    let mut rtmp;
     let (mut regmap, remove_regmap) = match regmap {
         Some(r) => (r, true),
-        None => (MutStrMap::new(), false),
+        None => {
+            rtmp = MutStrMap::new();
+            (&mut rtmp, false)
+        }
     };
     let mut constmap = HashMap::new();
 
@@ -400,7 +402,7 @@ pub fn preprocess(
         &file,
         |caps: &Captures| {
             count += 1;
-            format!("{}\n", scheduler(&caps[1], count, &regmap, debug))
+            format!("{}\n", scheduler(&sg, &caps[1], count, &regmap, debug))
         },
     );
 

@@ -324,7 +324,7 @@ fn sass_insert(
     };
     let new_cubin_file = new_cubin_file.clone().unwrap_or(cubin_file.clone());
     let include = Vec::new();
-    let mut kernel = sassas::assemble(sass_file, include, !noreuse)?;
+    let mut kernel = sassas::assemble(sass_file, &include, !noreuse)?;
     let mut cubin = Cubin::new(cubin_file)?;
     kernel.map.insert(
         "Kernel",
@@ -352,9 +352,10 @@ fn sass_pre(debug: bool, sass_file: &String, new_asm_file: &Option<String>) -> i
         None => Box::new(io::stdout()) as Box<Write>,
     };
     let fh = File::open(sass_file)?;
-    let fp = Box::new(BufReader::<File>::new(fh));
+    let mut fp = Box::new(BufReader::<File>::new(fh));
     let include = Vec::new();
-    let result = sassas::preprocess(fp, &include, debug, None)?;
+    let file = String::from_utf8(fp.fill_buf()?.to_vec()).expect("failed to convert input file");
+    let result = sassas::preprocess(&file, &include, debug, None)?;
     out.write_all(result.as_bytes())?;
     Ok(())
 }
