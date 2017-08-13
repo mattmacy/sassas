@@ -1,6 +1,6 @@
  #![allow(non_upper_case_globals)]
 use std::collections::HashMap;
-use utils::{MutMap, MutStrMap, regex_strip, regex_matches, regex_match, re_matches,
+use utils::{MutMap, MutStrMap, regex_strip, regex_matches, regex_match, regex_replace, re_matches,
             re_match_names, SVal};
 use regex::Regex;
 
@@ -1646,27 +1646,83 @@ pub fn parse_instruct<'i, 'r>(
 }
 
 pub fn normalize_spacing(inst: &str) -> String {
-    unimplemented!();
-    "".into()
+    let s = regex_replace(r"\t", " ", inst);
+    regex_replace(r"\s{2,}", " ", &s)
 }
 pub fn print_ctrl(code: u64) -> String {
-    unimplemented!();
-    "".into()
+    let stall = (code & 0x0_000f) >> 0;
+    let yieldf = (code & 0x00010) >> 4; // yield flag
+    let wrtdb = (code & 0x000e0) >> 5; // write dependency barier
+    let readb = (code & 0x00700) >> 8; // read  dependency barier
+    let watdb = (code & 0x1f800) >> 11; // wait on dependency barier
+    let yieldf = if yieldf != 0 { "-" } else { "Y" };
+    let wrtdb = if wrtdb == 7 {
+        "-".into()
+    } else {
+        format!("{}", wrtdb + 1)
+    };
+    let readb = if readb == 7 {
+        "-".into()
+    } else {
+        format!("{}", readb + 1)
+    };
+    let watdb = if watdb != 0 {
+        format!("{:2x}", watdb)
+    } else {
+        "--".into()
+    };
+    format!("{}{}{}{}{:x}", watdb, readb, wrtdb, yieldf, stall)
 }
+
 pub fn read_ctrl(ctrl: &str, context: &str) -> u64 {
-    unimplemented!();
-    0
+    let c: Vec<&str> = ctrl.split(":").collect();
+    let (watdb, readb, wrtdb, yieldf, stall) = (c[0], c[1], c[2], c[3], c[4]);
+    let watdb = if watdb == "--" { 0 } else { hex(watdb) };
+    let readb = if readb == "-" { 7 } else { hex(readb) - 1 };
+    let wrtdb = if wrtdb == "-" { 7 } else { hex(wrtdb) - 1 };
+    let yieldf = if yieldf == "y" || yieldf == "Y" { 0 } else { 1 };
+    let stall = hex(stall);
+    if watdb != watdb & 0x3f {
+        panic!(
+            "wait dep out of range(0x00-0x3f): {:x} at {}",
+            watdb,
+            context
+        );
+    }
+    (watdb << 11) | (readb << 8) | (wrtdb << 5) | (yieldf << 4) | (stall << 0)
 }
-pub fn get_reg_num(regmap: &MutStrMap<SVal>, regname: &str) -> String {
-    unimplemented!();
-    "".into()
+
+pub fn get_reg_num<'a, 'b>(regmap: &'a MutStrMap<SVal>, regname: &'b str) -> String {
+    if regmap.contains_key(regname) {
+        regmap.get(regname).unwrap().clone().into()
+    } else {
+        regname.into()
+    }
 }
 pub fn get_vec_registers<'i, 'r>(
     vectors: &MutStrMap<Vec<String>>,
     cap_data: &HashMap<&'r str, &'i str>,
-) -> String {
+) -> Option<String> {
+    let regname = cap_data.get("r0");
+    let regname = if regname.is_some() {
+        regname.unwrap()
+    } else {
+        return None;
+    };
+    if *regname == "RZ" {
+        return None;
+    }
+    if cap_data["type"] == ".64" || cap_data["131w4"] == "0x3" {
+        let matches = regex_matches(r"^R(\d+)$", regname);
+        if matches.len() != 0 {}
 
-    "".into()
+    }
+    if cap_data["type"] == ".128" || cap_data["131w4"] == "0xf" {
+        let matches = regex_matches(r"^R(\d+)$", regname);
+        if matches.len() != 0 {}
+    }
+
+    Some("".into())
 }
 pub fn get_addr_vec_registers<'i, 'r>(
     vectors: &MutStrMap<Vec<String>>,
