@@ -23,7 +23,36 @@ pub fn extract(
 pub fn assemble(file: &String, include: &Vec<String>, reuse: bool) -> io::Result<KernelSection> {
     let mut kernel_sec = KernelSection::default();
     let mut regmap = MutStrMap::new();
-    let file = preprocess(file, include, false, Some(&mut regmap));
+    let file = preprocess(file, include, false, Some(&mut regmap))?;
+    let sg = SassGrammar::new();
+    let vectors: Option<MutStrMap<Vec<String>>> = if let Some(s) = regmap.remove("__vectors") {
+        Some(s.into())
+    } else {
+        None
+    };
+    let regbank: Option<MutStrMap<String>> = if let Some(s) = regmap.remove("__regbank") {
+        Some(s.into())
+    } else {
+        None
+    };
+    //let labels =
+    for (linenum, line) in file.split("\n").enumerate() {
+
+        /* XXX skip of not preprocess_line */
+
+        let mut inst = AsmInstr::default();
+        if sg.process_asm_line(&line, linenum, &mut inst) {
+            if sg.no_dest.contains(&inst.op.as_str()) && inst.ctrl & 0x000e0 != 0x000e0 {}
+
+
+        } else if regex_match(r"^([a-zA-Z]\w*):", line) {
+
+        } else {
+            panic!("badly formed line at {}: {}", linenum, line);
+        }
+
+    }
+
 
     unimplemented!();
     Ok(kernel_sec)
@@ -261,23 +290,21 @@ fn scheduler(
             }
             continue;
         }
-        let mut inst = MutStrMap::new();
+
+        let mut inst = AsmInstr::default();
         if sg.process_asm_line(&line, linenum, &mut inst) {
             // match an instruction
-            let ctrl: u32 = inst["ctrl"].clone().into();
-            inst["first"] = (first || (ctrl & 0x1_f800) == 0).into();
+            inst.first = first || (inst.ctrl & 0x1_f800) == 0;
             first = false;
-            inst["exeTime"] = 0.into();
-            inst["order"] = ordered.into();
+            inst.order = ordered;
             if ordered != 0 {
                 ordered += 1;
             }
-            let comment: String = inst["comment"].clone().into();
-            inst["force_stall"] = (if regex_match(r"FORCE", &comment) {
-                                       ctrl & 0xf
-                                   } else {
-                                       0
-                                   }).into();
+            inst.force_stall = if regex_match(r"FORCE", &inst.comment) {
+                inst.ctrl & 0xf
+            } else {
+                0
+            };
             instrs.push(inst);
         } else if regex_match(r"^([a-zA-Z]\w*):", line) {
             // match a label
@@ -311,9 +338,9 @@ fn scheduler(
     for mut inst in instrs {
         let mut matched = false;
         // disambiguate for the type checker :-/
-        let op: String = inst["op"].clone().into();
+        let op = inst.op.clone();
         // cap_data can capture immutable references so create local copy
-        let inst_str: String = inst["inst"].clone().into();
+        let inst_str: String = inst.inst.clone();
         for gram in grammar[op.as_str()].iter() {
             let mut cap_data = HashMap::new();
             if !parse_instruct(&inst_str, &gram.rule, &mut cap_data) {
@@ -322,9 +349,9 @@ fn scheduler(
             let mut src: Vec<String> = Vec::new();
             // copy over instruction types for easier access
             // XXX this creates a new regex instance
-            inst["itypes"] = gram.itype.clone().into();
-            inst["dual"] = (if inst["dualCnt"].clone().into() { 1 } else { 0 }).into();
-            src.push(inst["predReg"].clone().into());
+            inst.itypes = gram.itype.clone().into();
+            inst.dual = if inst.dual_cnt { 1 } else { 0 };
+            src.push(inst.pred_reg.clone());
         }
     }
 

@@ -661,6 +661,24 @@ static flagsstr: &str = "\
     0x0004000000000000 HI\
 ";
 
+#[derive(Clone, Debug, Default)]
+pub struct AsmInstr {
+    pub linenum: usize,
+    pub pred: String,
+    pub space: String,
+    pub op: String,
+    pub comment: String,
+    pub inst: String,
+    pub ctrl: u64,
+    pub exe_time: u64,
+    pub order: usize,
+    pub first: bool,
+    pub force_stall: u64,
+    pub itypes: InstrType,
+    pub dual: u8,
+    pub dual_cnt: bool,
+    pub pred_reg: String,
+}
 
 #[derive(Default, Clone, Debug)]
 pub struct InstrType {
@@ -2011,27 +2029,19 @@ impl<'a> SassGrammar<'a> {
         }
         (code, reuse)
     }
-    pub fn process_asm_line(
-        &self,
-        line: &str,
-        linenum: usize,
-        cap_data: &mut MutStrMap<SVal>,
-    ) -> bool {
+    pub fn process_asm_line(&self, line: &str, linenum: usize, asm_instr: &mut AsmInstr) -> bool {
         let mut map = HashMap::new();
         if !re_matches_by_name(line, &self.asm_re, &mut map) {
             return false;
         }
-        cap_data.insert("linenum", linenum.into());
-        cap_data.insert("pred", map["pred"].into());
-        cap_data.insert("predReg", map["predReg"].into());
-        cap_data.insert("space", map["space"].into());
-        cap_data.insert("op", map["op"].into());
-        cap_data.insert("comment", map["comment"].into());
-        cap_data.insert(
-            "inst",
-            normalize_spacing(&format!("{}{}{}", map["pred"], map["op"], map["rest"])).into(),
-        );
-        cap_data.insert("ctrl", read_ctrl(map["ctrl"], line).into());
+        asm_instr.linenum = linenum;
+        asm_instr.pred = map["pred"].into();
+        asm_instr.space = map["space"].into();
+        asm_instr.op = map["op"].into();
+        asm_instr.comment = map["comment"].into();
+        asm_instr.inst = normalize_spacing(&format!("{}{}{}", map["pred"], map["op"], map["rest"]))
+            .into();
+        asm_instr.ctrl = read_ctrl(map["ctrl"], line).into();
         true
     }
     pub fn process_sass_line<'r, 'i>(
