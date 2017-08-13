@@ -4,6 +4,7 @@ use std::hash::Hash;
 use std::collections::hash_map;
 use std::ops::{Index, IndexMut};
 use std::fmt::Debug;
+use std::borrow::Borrow;
 
 #[derive(Clone, Debug)]
 pub struct MutMap<K: Eq + Hash, V: Default> {
@@ -97,6 +98,17 @@ impl<K: Eq + Hash + Clone + Debug, V: Default> MutMap<K, V> {
             Some(v) => Some(v.into_inner()),
         }
     }
+    pub fn remove<Q: ?Sized>(&mut self, k: &Q) -> Option<V>
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq,
+    {
+        if let Some(c) = self.map.remove(k) {
+            Some(c.into_inner())
+        } else {
+            None
+        }
+    }
 }
 
 impl<'a, K: Hash + Eq + Clone + Debug, V: Default> Index<&'a K> for MutMap<K, V> {
@@ -154,9 +166,11 @@ impl<V: Default> MutStrMap<V> {
     pub fn contains_key(&self, name: &str) -> bool {
         self.map.contains_key(&name.into())
     }
-
     pub fn insert(&mut self, k: &str, v: V) -> Option<V> {
         self.map.insert(k.into(), v)
+    }
+    pub fn remove(&mut self, k: &str) -> Option<V> {
+        self.map.remove(k)
     }
 }
 
