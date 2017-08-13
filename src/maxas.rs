@@ -5,7 +5,7 @@ use unsafe_lib::MutStrMap;
 
 use regex::{Regex, Captures};
 use sval::*;
-use base_grammar::InstrType;
+use sassas_grammar::InstrType;
 use utils::*;
 
 pub fn test(fp: Box<BufRead>, reg: bool, all: bool) -> io::Result<()> {

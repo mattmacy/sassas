@@ -24,8 +24,7 @@ mod cubin;
 mod maxas;
 mod sval;
 mod unsafe_lib;
-//mod sassas_grammar;
-mod base_grammar;
+mod sassas_grammar;
 mod utils;
 
 #[derive(Debug, Clone)]
