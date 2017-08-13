@@ -928,7 +928,7 @@ fn getI(orig: &str, pos: u32, mask: i64) -> u64 {
 }
 
 
-pub fn build_operands() -> HashMap<&'static str, Box<Fn(&str) -> u64>> {
+pub fn build_operands<'a>() -> HashMap<&'a str, Box<Fn(&str) -> u64>> {
     let mut operands: HashMap<_, Box<Fn(&str) -> u64>> = HashMap::new();
 
     operands.insert("p0", Box::new(|s: &str| getP(s, 0)));
@@ -1826,7 +1826,7 @@ pub fn replace_xmads(file: &str) -> String {
     unimplemented!();
     "".into()
 }
-pub struct SassGrammar {
+pub struct SassGrammar<'a> {
     ctrl_re: Regex,
     pred_re: Regex,
     inst_re: Regex,
@@ -1835,9 +1835,13 @@ pub struct SassGrammar {
     sass_re: Regex,
     flags: MutStrMap<MutStrMap<SVal>>,
     immed_codes: HashMap<u64, u64>,
+    reuse_codes: HashMap<&'a str, u64>,
+    immed_ops: Vec<&'a str>,
+    const_codes: HashMap<&'a str, u64>,
+    operands: HashMap<&'a str, Box<Fn(&str) -> u64>>,
 }
 
-impl SassGrammar {
+impl<'a> SassGrammar<'a> {
     pub fn new() -> Self {
         let pred_re_str = r"(?<pred>@!?(?<predReg>P\d)\s+)";
         let inst_re_base_str = r"?(?<op>\w+)(?<rest>[^;]*;)";
@@ -1861,10 +1865,18 @@ impl SassGrammar {
         let asm_re = Regex::new(&asm_re_str).unwrap();
         let sass_re = Regex::new(&sass_re_str).unwrap();
         let mut immed_codes: HashMap<u64, u64> = HashMap::new();
+        let mut reuse_codes: HashMap<&'a str, u64> = HashMap::new();
+        let mut const_codes: HashMap<&'a str, u64> = HashMap::new();
         immed_codes.insert(0x5c, 0x64);
         immed_codes.insert(0x5b, 0x6d);
         immed_codes.insert(0x59, 0x6b);
         immed_codes.insert(0x58, 0x68);
+        reuse_codes.insert("reuse1", 1);
+        reuse_codes.insert("reuse2", 2);
+        reuse_codes.insert("reuse3", 4);
+        const_codes.insert("c20", 0x10);
+        const_codes.insert("c39", 0x08);
+        let immed_ops = vec!["i20", "f20", "d20"];
         SassGrammar {
             ctrl_re: ctrl_re,
             pred_re: pred_re,
@@ -1874,22 +1886,31 @@ impl SassGrammar {
             sass_re: sass_re,
             flags: build_flags(),
             immed_codes: immed_codes,
+            reuse_codes: reuse_codes,
+            immed_ops: immed_ops,
+            const_codes: const_codes,
+            operands: build_operands(),
         }
     }
     pub fn gen_reuse_code<'i, 'r>(&self, cap_data: &mut HashMap<&'r str, &'i str>) -> u64 {
-        unimplemented!();
-        0
+        let mut reuse = 0;
+        for k in self.reuse_codes.keys() {
+            if cap_data.contains_key(k) {
+                reuse |= self.reuse_codes[k];
+            }
+        }
+        reuse
     }
-    pub fn gen_code<'a, 'i, 'r>(
+    pub fn gen_code(
         &self,
         op: &str,
         grammar: &GrammarElt,
-        cap_data: &mut HashMap<&'r str, &'i str>,
-        mut test: Option<&mut Vec<&'static str>>,
+        cap_data: &mut HashMap<&'a str, &str>,
+        mut test: Option<&mut Vec<&'a str>>,
     ) -> (u64, u64) {
         let flags = &self.flags[op];
         let mut code = grammar.code;
-        let reuse = 0 as u64;
+        let mut reuse = 0 as u64;
         let immed_code = self.immed_codes[&(code >> 56)];
         if cap_data.contains_key("noPred") {
             cap_data.remove("noPred");
@@ -1916,9 +1937,55 @@ impl SassGrammar {
             }
 
         }
+        for rcode in ["rcode1", "rcode2", "rcode3"].iter() {
+            if let Some(_) = cap_data.remove(rcode) {
+                reuse |= self.reuse_codes[rcode];
+                if let Some(ref mut r) = test {
+                    r.push(rcode);
+                }
+            }
+        }
+        for capture in cap_data.keys() {
+            if self.immed_ops.contains(capture) {
+                code ^= (immed_code << 56);
+            } else if self.const_codes.contains_key(capture) {
+                code ^= self.const_codes[capture] << 56;
+            }
+            if self.operands.contains_key(capture) {
+                if *capture != "r20" || !cap_data.contains_key("r39s20") {
+                    code ^= self.operands[capture](cap_data[capture]);
+                    if let Some(ref mut r) = test {
+                        r.push(capture);
+                    }
+                }
+            }
+            if flags.contains_key(capture) {
+                match flags[*capture] {
+                    SVal::Str(ref s) => {
+                        code ^= hex(&s);
+                        if let Some(ref mut r) = test {
+                            r.push(capture);
+                        }
 
-        unimplemented!();
-        (0, 0)
+                    }
+                    SVal::StringMap(ref flagmap) => {
+                        let flag: u64 = hex(&flagmap[*capture]);
+                        code ^= flag;
+                        if let Some(ref mut r) = test {
+                            r.push(capture);
+                            /* XXX fixme */
+                            r.push("capdata->capture")
+                        }
+
+                    }
+                    _ => panic!("unexpected type"),
+                }
+            } else if !self.operands.contains_key(capture) && test.is_none() {
+                println!("UNUSED: {}: {}: {}", op, capture, cap_data[capture]);
+                println!("{:?}", flags);
+            }
+        }
+        (code, reuse)
     }
     pub fn process_asm_line<'r, 'i>(
         &self,
