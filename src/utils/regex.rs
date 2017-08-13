@@ -3,6 +3,9 @@ use regex::{Regex, Captures};
 pub fn regex_strip(expr: &str, line: &str) -> String {
     (*Regex::new(expr).unwrap().replace_all(line, "")).into()
 }
+pub fn regex_replace(expr: &str, new: &str, line: &str) -> String {
+    (*Regex::new(expr).unwrap().replace_all(line, new)).into()
+}
 pub fn regex_match(expr: &str, line: &str) -> bool {
     Regex::new(expr).unwrap().is_match(line)
 }
