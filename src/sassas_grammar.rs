@@ -1586,3 +1586,56 @@ pub fn parse_instruct<'i, 'r>(
     }
     return true;
 }
+
+pub fn print_ctrl(code: u64) -> String {
+    unimplemented!();
+    "".into()
+}
+pub fn read_ctrl(ctrl: &str, context: &str) -> u64 {
+    unimplemented!();
+    0
+}
+pub fn get_reg_num(regmap: &MutStrMap<SVal>, regname: &str) -> String {
+    unimplemented!();
+    "".into()
+}
+pub fn get_vec_registers<'i, 'r>(vectors: &MutStrMap<Vec<String>>, cap_data: &HashMap<&'r str, &'i str>) -> String {
+
+    "".into()
+}
+pub fn get_addr_vec_registers<'i, 'r>(vectors: &MutStrMap<Vec<String>>, cap_data: &HashMap<&'r str, &'i str>) -> String {
+
+    "".into()
+}
+pub fn replace_xmads(file: &str) -> String {
+    unimplemented!();
+    "".into()
+}
+pub struct SassGrammar {
+}
+
+impl SassGrammar {
+    pub fn new() -> Self {
+        SassGrammar {}
+    }
+    pub fn gen_reuse_code<'i, 'r>(&self, cap_data: &HashMap<&'r str, &'i str>) -> u64 {
+        unimplemented!();
+        0
+    }
+    pub fn gen_code<'i, 'r>(&self, op: &str, cap_data: &HashMap<&'r str, &'i str>, test: bool) -> (u64, u64) {
+        unimplemented!();
+        (0, 0)
+    }
+    pub fn process_asm_line<'r, 'i>(&self, line: &str, linenum: usize, cap_data: &mut HashMap<&'r str, &'i str>) -> bool {
+        unimplemented!();
+        false
+    }
+    pub fn process_sass_line<'r, 'i>(&self, line: &str, linenum: usize, cap_data: &mut HashMap<&'r str, &'i str>) -> bool {
+        unimplemented!();
+        false
+    }
+    pub fn process_sass_ctrl_line(&self, line: &str, ctrl: &mut Vec<u64>, ruse: &mut Vec<u64>) -> bool {
+        unimplemented!();
+        false
+    }
+}
