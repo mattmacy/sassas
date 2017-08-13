@@ -1,6 +1,7 @@
  #![allow(non_upper_case_globals)]
 use std::collections::HashMap;
-use utils::{MutMap, MutStrMap, regex_matches, regex_match, re_matches, re_match_names, SVal};
+use utils::{MutMap, MutStrMap, regex_strip, regex_matches, regex_match, re_matches,
+            re_match_names, SVal};
 use regex::Regex;
 
 static flagsstr: &str = "\
@@ -819,9 +820,6 @@ static voteT: InstrType = InstrType {
     reuse: false,
 };
 
-
-
-
 fn hex(s: &str) -> u64 {
     match s.parse() {
         Ok(val) => val,
@@ -831,8 +829,12 @@ fn hex(s: &str) -> u64 {
 
 #[allow(non_snake_case)]
 fn getP(val: &str, pos: usize) -> u64 {
-    unimplemented!();
-    0
+    let matches = regex_matches(r"^P(\d+|T)$", val);
+    if matches.len() == 0 {
+        panic!("Bad predicate name found: {}", val);
+    }
+    let p = &matches[0][1];
+    if p == "T" { 7 << pos } else { hex(p) << pos }
 }
 
 #[allow(non_snake_case)]
@@ -859,14 +861,70 @@ fn getC(val: &str) -> u64 {
 
 #[allow(non_snake_case)]
 fn getF(val: &str, pos: u32, itype: char, trunc: u32) -> u64 {
-    unimplemented!();
-    0
+    let val = if regex_match(r"^0x[0-9a-zA-Z]+", val) {
+        hex(val)
+    } else if regex_match(r"INF", val) {
+        if trunc == 0 {
+            0x7f800000
+        } else if itype == 'f' {
+            0x7f800
+        } else {
+            0x7ff00
+        }
+    } else {
+        /* XXX -- what is the end result of unpacking as 'L' vs 'Q' ? */
+        let val = hex(val);
+        if trunc != 0 {
+            (val >> trunc) & 0x7ffff
+        } else {
+            val
+        }
+    };
+    val << pos
 }
 
+/* XXX -- revisit WRT sign extension handling XXX */
 #[allow(non_snake_case)]
-fn getI(orig: &str, pos: u32, mask: u32) -> u64 {
-    unimplemented!();
-    0
+fn getI(orig: &str, pos: u32, mask: i64) -> u64 {
+    let neg = regex_match(r"^\-", orig);
+
+    let val = if neg {
+        regex_strip(r"-", orig)
+    } else {
+        orig.into()
+    };
+    let val = if regex_match(r"^(\d+)[xX]<([^>]+)>", &val) {
+        panic!(" implement dyon parsing!");
+    /*
+        # allow any perl expression and multiply result by leading decimal.
+        # also allow global scalar varibles in the expression.
+        my $mul = $1;
+        my $exp = $2;
+        # strip leading zeros (don't interpret numbers as octal)
+        $exp =~ s/(?<!\d)0+(?=[1-9])//g;
+        my @globals = $exp =~ m'\$\w+'g;
+        my $our = @globals ? ' our (' . join(',',@globals) . ');' : '';
+        $val = $mul * eval "package MaxAs::MaxAs::CODE;$our $exp";
+        */
+    } else if regex_match(r"^0x[0-9a-zA-Z]+", &val) {
+        hex(&val) as i64
+    } else {
+        panic!("bad immediate {}", orig);
+    };
+    let val = if neg {
+        (-val & mask)
+    } else {
+        if val & mask != val {
+            panic!(
+                "Immediate value out of range(0x{:x}): 0x{:x} ({})",
+                mask,
+                val,
+                orig
+            );
+        }
+        val
+    };
+    (val << pos) as u64
 }
 
 
@@ -1587,6 +1645,10 @@ pub fn parse_instruct<'i, 'r>(
     return true;
 }
 
+pub fn normalize_spacing(inst: &str) -> String {
+    unimplemented!();
+    "".into()
+}
 pub fn print_ctrl(code: u64) -> String {
     unimplemented!();
     "".into()
@@ -1599,11 +1661,17 @@ pub fn get_reg_num(regmap: &MutStrMap<SVal>, regname: &str) -> String {
     unimplemented!();
     "".into()
 }
-pub fn get_vec_registers<'i, 'r>(vectors: &MutStrMap<Vec<String>>, cap_data: &HashMap<&'r str, &'i str>) -> String {
+pub fn get_vec_registers<'i, 'r>(
+    vectors: &MutStrMap<Vec<String>>,
+    cap_data: &HashMap<&'r str, &'i str>,
+) -> String {
 
     "".into()
 }
-pub fn get_addr_vec_registers<'i, 'r>(vectors: &MutStrMap<Vec<String>>, cap_data: &HashMap<&'r str, &'i str>) -> String {
+pub fn get_addr_vec_registers<'i, 'r>(
+    vectors: &MutStrMap<Vec<String>>,
+    cap_data: &HashMap<&'r str, &'i str>,
+) -> String {
 
     "".into()
 }
@@ -1611,8 +1679,7 @@ pub fn replace_xmads(file: &str) -> String {
     unimplemented!();
     "".into()
 }
-pub struct SassGrammar {
-}
+pub struct SassGrammar {}
 
 impl SassGrammar {
     pub fn new() -> Self {
@@ -1622,19 +1689,39 @@ impl SassGrammar {
         unimplemented!();
         0
     }
-    pub fn gen_code<'i, 'r>(&self, op: &str, cap_data: &HashMap<&'r str, &'i str>, test: bool) -> (u64, u64) {
+    pub fn gen_code<'i, 'r>(
+        &self,
+        op: &str,
+        cap_data: &HashMap<&'r str, &'i str>,
+        test: bool,
+    ) -> (u64, u64) {
         unimplemented!();
         (0, 0)
     }
-    pub fn process_asm_line<'r, 'i>(&self, line: &str, linenum: usize, cap_data: &mut HashMap<&'r str, &'i str>) -> bool {
+    pub fn process_asm_line<'r, 'i>(
+        &self,
+        line: &str,
+        linenum: usize,
+        cap_data: &mut HashMap<&'r str, &'i str>,
+    ) -> bool {
         unimplemented!();
         false
     }
-    pub fn process_sass_line<'r, 'i>(&self, line: &str, linenum: usize, cap_data: &mut HashMap<&'r str, &'i str>) -> bool {
+    pub fn process_sass_line<'r, 'i>(
+        &self,
+        line: &str,
+        linenum: usize,
+        cap_data: &mut HashMap<&'r str, &'i str>,
+    ) -> bool {
         unimplemented!();
         false
     }
-    pub fn process_sass_ctrl_line(&self, line: &str, ctrl: &mut Vec<u64>, ruse: &mut Vec<u64>) -> bool {
+    pub fn process_sass_ctrl_line(
+        &self,
+        line: &str,
+        ctrl: &mut Vec<u64>,
+        ruse: &mut Vec<u64>,
+    ) -> bool {
         unimplemented!();
         false
     }
