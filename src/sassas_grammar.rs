@@ -1840,6 +1840,12 @@ pub struct SassGrammar<'a> {
     pub const_codes: HashMap<&'a str, u64>,
     pub operands: HashMap<&'a str, Box<Fn(&str) -> u64>>,
     pub grammar: HashMap<&'a str, Vec<GrammarElt>>,
+
+    pub rel_offset: Vec<&'a str>,
+    pub abs_offset: Vec<&'a str>,
+    pub jump_op: Vec<&'a str>,
+    pub no_dest: Vec<&'a str>,
+    pub reuse_slots: HashMap<&'a str, u64>,
 }
 
 impl<'a> SassGrammar<'a> {
@@ -1878,6 +1884,17 @@ impl<'a> SassGrammar<'a> {
         const_codes.insert("c20", 0x10);
         const_codes.insert("c39", 0x08);
         let immed_ops = vec!["i20", "f20", "d20"];
+        let rel_offset = vec!["BRA", "SSY", "CAL", "PBK", "PCNT"];
+        let abs_offset = vec!["JCAL"];
+        let jump_op = vec!["BRA", "SSY", "CAL", "PBK", "PCNT", "JCAL"];
+        let no_dest = vec!["ST", "STG", "STS", "STL", "RED"];
+        let reuse_slots = vec![("r8", 1), ("r20", 2), ("r39", 4)];
+        let reuse_slots = reuse_slots.iter().map(|&(k, v)| (k, v)).collect::<HashMap<
+            &'a str,
+            u64,
+        >>();
+
+
         SassGrammar {
             ctrl_re: ctrl_re,
             pred_re: pred_re,
@@ -1892,6 +1909,11 @@ impl<'a> SassGrammar<'a> {
             const_codes: const_codes,
             operands: build_operands(),
             grammar: build_grammar(),
+            rel_offset: rel_offset,
+            abs_offset: abs_offset,
+            jump_op: jump_op,
+            no_dest: no_dest,
+            reuse_slots: reuse_slots,
         }
     }
     pub fn gen_reuse_code<'i, 'r>(&self, cap_data: &mut HashMap<&'r str, &'i str>) -> u64 {
