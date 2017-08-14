@@ -678,18 +678,20 @@ pub struct AsmInstr {
     pub dual: u8,
     pub dual_cnt: bool,
     pub pred_reg: String,
+    pub ctrl_idx: usize,
+    pub jump: u64,
 }
 
 #[derive(Default, Clone, Debug)]
 pub struct InstrType {
-    class: &'static str,
-    lat: u8,
-    blat: u8,
-    rlat: u8,
-    rhold: u8,
-    tput: u8,
-    dual: bool,
-    reuse: bool,
+    pub class: &'static str,
+    pub lat: u8,
+    pub blat: u8,
+    pub rlat: u8,
+    pub rhold: u8,
+    pub tput: u8,
+    pub dual: bool,
+    pub reuse: bool,
 }
 
 
@@ -838,7 +840,7 @@ static voteT: InstrType = InstrType {
     reuse: false,
 };
 
-fn hex(s: &str) -> u64 {
+pub fn hex(s: &str) -> u64 {
     match s.parse() {
         Ok(val) => val,
         Err(err) => panic!("err: {}", err),
