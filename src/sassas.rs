@@ -30,29 +30,145 @@ pub fn assemble(file: &String, include: &Vec<String>, reuse: bool) -> io::Result
     } else {
         None
     };
-    let regbank: Option<MutStrMap<String>> = if let Some(s) = regmap.remove("__regbank") {
-        Some(s.into())
+    let regbank: MutStrMap<String> = if let Some(s) = regmap.remove("__regbank") {
+        s.into()
     } else {
-        None
+        MutStrMap::new()
     };
     //let labels =
+    let (mut instructs, mut branches) = (vec![AsmInstr::default()], Vec::new());
+    let mut ctrl = vec![Vec::new()];
+    let mut ctrl_idx = 0;
+    let mut labels = MutStrMap::<u64>::new();
     for (linenum, line) in file.split("\n").enumerate() {
 
         /* XXX skip of not preprocess_line */
 
         let mut inst = AsmInstr::default();
         if sg.process_asm_line(&line, linenum, &mut inst) {
-            if sg.no_dest.contains(&inst.op.as_str()) && inst.ctrl & 0x000e0 != 0x000e0 {}
-
-
+            if sg.no_dest.contains(&inst.op.as_str()) && inst.ctrl & 0x000e0 != 0x000e0 {
+                panic!(
+                    "It is illegal to set a Read-After-Write dependency on a memory store op (store ops don't write to a register)\n{}",
+                    inst.inst
+                );
+            }
+            if sg.jump_op.contains(&inst.op.as_str()) {
+                branches.push(instructs.len());
+            }
+            ctrl[ctrl_idx].push(inst.ctrl);
+            inst.ctrl_idx = ctrl_idx;
+            if instructs.len() & 3 == 0 {
+                ctrl.push(Vec::new());
+                instructs.push(AsmInstr::default());
+                ctrl_idx += 1;
+            }
         } else if regex_match(r"^([a-zA-Z]\w*):", line) {
-
+            let matches = regex_matches(r"^([a-zA-Z]\w*):", line);
+            labels[&matches[0][1]] = instructs.len() as u64;
         } else {
             panic!("badly formed line at {}: {}", linenum, line);
         }
+    }
+    // add the final BRA op and align the number of instructions to a multiple of 8
+    ctrl[ctrl_idx].push(0x007ff);
+    instructs.push(AsmInstr {
+        op: "BRA".into(),
+        inst: "BRA 0xfffff8".into(),
+        ..Default::default()
+    });
+    while instructs.len() & 7 != 0 {
+        if instructs.len() & 3 == 0 {
+            ctrl.push(Vec::new());
+            instructs.push(AsmInstr::default());
+            ctrl_idx += 1;
+        }
+        ctrl[ctrl_idx].push(0x007e0);
+        instructs.push(AsmInstr {
+            op: "NOP".into(),
+            inst: "NOP".into(),
+            ..Default::default()
+        });
+    }
+    // remap labels
+    for i in branches {
+        let inst = instructs[i].inst.clone();
+        let matches = regex_matches(r"(\w+);$", &inst);
+        if matches.is_empty() || !labels.contains_key(&matches[0][1]) {
+            panic!("instruction has invalid label: {}", inst);
+        }
+        instructs[i].jump = labels[&matches[0][1]];
+        if sg.rel_offset.contains(&instructs[i].op.as_str()) {
+            let inst = Regex::new(r"(\w+);$").unwrap().replace_all(
+                &inst,
+                |caps: &Captures| {
+                    format!(
+                        "0x{:06x}",
+                        ((labels[&caps[1]] - hex(&caps[1]) - 1) * 8) & 0xffffff
+                    )
+                },
+            );
+            instructs[i].inst = (*inst).into();
+        } else {
+            let inst = Regex::new(r"(\w+);$").unwrap().replace_all(
+                &inst,
+                |caps: &Captures| {
+                    format!("0x{:06x}", (labels[&caps[1]] * 8) & 0xffffff)
+                },
+            );
+            instructs[i].inst = (*inst).into();
+        }
+    }
+    // calculate optimal register reuse
+    // This effects register bank decisions so do it before analyzing register use
+    for (i, instr) in instructs.iter().enumerate() {
+        if i & 3 == 0 {
+            continue;
+        }
+        let (op, inst, ctrl) = (&instr.op, &instr.inst, instr.ctrl);
+        let mut matched = false;
+
+        for elt in &sg.grammar[op.as_str()] {
+            let mut cap_data = HashMap::new();
+            if !parse_instruct(&inst, &elt.rule, &mut cap_data) {
+                continue;
+            }
+            matched = true;
+            if reuse {
+
+            } else if elt.itype.reuse {
+
+            }
+            break;
+        }
+        if !matched {
+            for r in &sg.grammar[op.as_str()] {
+                println!("rule: {:?}", r.rule);
+            }
+            panic!("Unable to encode: {}", inst);
+        }
 
     }
+    // Assign registers to requested banks if possible
+    let mut keys = regbank.keys().collect::<Vec<_>>();
+    keys.sort();
+    for r in keys {}
+    // calculate register live times and preferred banks for non-fixed registers.
+    // LiveTime only half implemented...
+    for (i, inst) in instructs.iter().enumerate() {}
 
+    // assign unassigned registers
+    // sort by most restricted, then most used, then name
+
+    // for r in paired_banks
+
+
+    // Now assign any remaining to first available
+    let mut keys = regmap.keys().collect::<Vec<_>>();
+    keys.sort();
+    for r in keys {}
+
+    // final pass to piece together control codes
+    for (i, inst) in instructs.iter().enumerate() {}
 
     unimplemented!();
     Ok(kernel_sec)
